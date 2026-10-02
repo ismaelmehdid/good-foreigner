@@ -73,8 +73,11 @@ Artifact Registry.
 - **Data minimization.** Gemma 4 screens every item first; only immigration-relevant items go on to
   the larger Gemini model. Because Gemma is open-weight, this screening step could later run fully
   on-device, so irrelevant emails would never leave the phone.
-- **Grounded answers.** The model may only cite rule ids from the curated rules file, and every alert
-  links to the official source.
+- **Every fact is sourced from official U.S. government rules.** The rules file cites only official
+  sources (fam.state.gov, ecfr.gov, uscode.house.gov, uscis.gov, cbp.gov). Gemini must map every
+  factual claim to one of those rules (`evidence: [{ claim, ruleId }]`) and may not state legal facts
+  from general knowledge. The server drops citations to unknown rules; a warning with no official
+  source is raised to at least "Be careful" and marked **Unverified** in the app.
 - **Honest uncertainty.** Gray areas (remote work for a foreign employer, contest prizes, job
   interviews) are labeled as gray areas, with a recommendation to confirm with an attorney.
 - **Known risks.** False negatives (saying OK when it is not) are the main risk, so the app is tuned to

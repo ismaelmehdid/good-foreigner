@@ -35,6 +35,12 @@ export interface TriageResult {
   reason: string;
 }
 
+/** One factual claim in a verdict and the official rule that supports it. */
+export interface Evidence {
+  claim: string;
+  ruleId: string;
+}
+
 export interface Verdict {
   risk: Exclude<RiskLevel, "unknown">;
   title: string;
@@ -42,6 +48,8 @@ export interface Verdict {
   ruleIds: string[];
   whatToDoInstead: string;
   suggestedReply?: string;
+  /** Every factual claim mapped to the official rule that supports it. */
+  evidence?: Evidence[];
 }
 
 export interface Citation {
@@ -58,6 +66,8 @@ export interface Alert {
   risk: RiskLevel;
   citations: Citation[];
   error?: string;
+  /** True when the verdict flags a risk but cites no official rule; the UI marks it unverified. */
+  unsourced?: boolean;
 }
 
 export type RuleScope = "B1" | "B2" | "VWP";
