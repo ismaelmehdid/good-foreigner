@@ -99,8 +99,8 @@ your Google account as a test user.
 
 ```bash
 gcloud run deploy good-foreigner --source . --region us-central1 --allow-unauthenticated \
-  --set-env-vars GEMINI_MODEL=gemini-3.8-flash,GEMMA_MODEL=gemma-4-26b-a4b-it,GOOGLE_CLIENT_ID=... \
-  --set-env-vars GEMINI_API_KEY=...
+  --set-env-vars "^|^GEMINI_MODEL=gemini-3.8-flash|GEMMA_MODEL=gemma-4-26b-a4b-it|GEMINI_FALLBACK_MODELS=gemini-3.5-flash-lite,gemini-3.1-flash-lite|GOOGLE_CLIENT_ID=..." \
+  --update-env-vars GEMINI_API_KEY=...
 ```
 
 Then add the Cloud Run URL to the OAuth client's authorized JavaScript origins.

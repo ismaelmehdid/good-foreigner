@@ -1,10 +1,13 @@
 import type { Alert, Citation, InboxItem, Profile, RiskLevel, TriageResult, Verdict } from "@/lib/types";
 import { rulesById } from "@/lib/rules/visitorRules";
 import { triage } from "./triage";
-import { analyze } from "./analyze";
+import { analyze, analyzeBatch } from "./analyze";
 
 export const MAX_BODY_CHARS = 2_000;
 export const CONCURRENCY = 5;
+/** Per-item fallback when the batch call fails: low concurrency to respect free-tier RPM. */
+export const FALLBACK_CONCURRENCY = 2;
+const ANALYZE_ERROR = "Could not analyze this item — retry.";
 
 export const RISK_ORDER: RiskLevel[] = ["critical", "high", "medium", "low", "unknown", "none"];
 
@@ -58,6 +61,31 @@ function citationsFor(verdict: Verdict): Citation[] {
 }
 
 /**
+ * Verdicts for the items that need analysis. Several items → ONE batched Gemini call
+ * (free tier allows ~5 requests/min/model); a single item → one plain call. If the batch
+ * call fails, fall back to per-item calls with concurrency 2. Missing ids → no verdict.
+ */
+async function analyzeAll(items: InboxItem[], profile: Profile): Promise<Map<string, Verdict>> {
+  if (items.length === 0) return new Map();
+  if (items.length > 1) {
+    try {
+      return await analyzeBatch(items, profile);
+    } catch (err) {
+      console.error(`[analyzeBatch] failed, falling back to per-item:`, (err as Error).message);
+    }
+  }
+  const out = new Map<string, Verdict>();
+  await mapLimit(items, FALLBACK_CONCURRENCY, async (item) => {
+    try {
+      out.set(item.id, await analyze(item, profile));
+    } catch (err) {
+      console.error(`[analyze] item ${item.id} failed:`, (err as Error).message);
+    }
+  });
+  return out;
+}
+
+/**
  * Triage every item (Gemma), analyze the relevant ones (Gemini), attach citations, sort by risk.
  * Items the user typed themselves (`source: "action"`) are always analyzed: the user asked.
  */
@@ -72,25 +100,15 @@ export async function runPipeline(items: InboxItem[], profile: Profile): Promise
     }
   });
 
-  const alerts: Alert[] = await mapLimit(trimmed, CONCURRENCY, async (item, i) => {
+  const needsAnalysis = (i: number) => triaged[i].relevant || trimmed[i].source === "action";
+  const verdicts = await analyzeAll(trimmed.filter((_, i) => needsAnalysis(i)), profile);
+
+  const alerts: Alert[] = trimmed.map((item, i) => {
     const t = triaged[i];
-    if (!t.relevant && item.source !== "action") {
-      return { item, triage: t, verdict: null, risk: "none", citations: [] };
-    }
-    try {
-      const verdict = await analyze(item, profile);
-      return { item, triage: t, verdict, risk: verdict.risk, citations: citationsFor(verdict) };
-    } catch (err) {
-      console.error(`[analyze] item ${item.id} failed:`, (err as Error).message);
-      return {
-        item,
-        triage: t,
-        verdict: null,
-        risk: "unknown",
-        citations: [],
-        error: "Could not analyze this item — retry.",
-      };
-    }
+    if (!needsAnalysis(i)) return { item, triage: t, verdict: null, risk: "none", citations: [] };
+    const verdict = verdicts.get(item.id);
+    if (!verdict) return { item, triage: t, verdict: null, risk: "unknown", citations: [], error: ANALYZE_ERROR };
+    return { item, triage: t, verdict, risk: verdict.risk, citations: citationsFor(verdict) };
   });
 
   return sortAlerts(alerts);

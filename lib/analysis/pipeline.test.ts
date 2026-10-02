@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { InboxItem, Profile, Verdict } from "@/lib/types";
 
 vi.mock("./triage", () => ({ triage: vi.fn() }));
-vi.mock("./analyze", () => ({ analyze: vi.fn() }));
+vi.mock("./analyze", () => ({ analyze: vi.fn(), analyzeBatch: vi.fn() }));
 vi.mock("@/lib/rules/visitorRules", () => ({
   rulesById: (ids: string[]) =>
     ids
@@ -19,9 +19,9 @@ vi.mock("@/lib/rules/visitorRules", () => ({
       })),
 }));
 
-import { runPipeline, mapLimit, MAX_BODY_CHARS } from "./pipeline";
+import { runPipeline, mapLimit, parseProfile, MAX_BODY_CHARS, FALLBACK_CONCURRENCY } from "./pipeline";
 import { triage } from "./triage";
-import { analyze } from "./analyze";
+import { analyze, analyzeBatch } from "./analyze";
 
 const profile: Profile = { visaType: "VWP", entryDate: "2026-08-01" };
 const item = (id: string, body = id, source: InboxItem["source"] = "email"): InboxItem => ({ id, source, body });
@@ -32,24 +32,28 @@ const verdict = (risk: Verdict["risk"], ruleIds: string[] = []): Verdict => ({
   ruleIds,
   whatToDoInstead: "w",
 });
+const relevantUnless = (...irrelevant: string[]) =>
+  vi.mocked(triage).mockImplementation(async (it) => ({
+    relevant: !irrelevant.includes(it.id),
+    category: "other",
+    reason: "",
+  }));
 
 beforeEach(() => {
   vi.mocked(triage).mockReset();
   vi.mocked(analyze).mockReset();
+  vi.mocked(analyzeBatch).mockReset();
 });
 
 describe("runPipeline", () => {
-  it("skips analysis for irrelevant emails, sorts by risk, attaches citations, maps failures to unknown", async () => {
-    vi.mocked(triage).mockImplementation(async (it) => ({
-      relevant: it.id !== "dinner",
-      category: "other",
-      reason: "",
-    }));
-    vi.mocked(analyze).mockImplementation(async (it) => {
-      if (it.id === "gig") return verdict("critical", ["no-paid-gigs-from-us-sources", "made-up"]);
-      if (it.id === "conf") return verdict("low");
-      throw new Error("boom");
-    });
+  it("analyzes all relevant items in ONE batch call, sorts by risk, cites rules, missing ids → unknown", async () => {
+    relevantUnless("dinner");
+    vi.mocked(analyzeBatch).mockResolvedValue(
+      new Map([
+        ["gig", verdict("critical", ["no-paid-gigs-from-us-sources", "made-up"])],
+        ["conf", verdict("low")],
+      ]),
+    );
 
     const alerts = await runPipeline([item("dinner"), item("conf"), item("broken"), item("gig")], profile);
 
@@ -59,7 +63,9 @@ describe("runPipeline", () => {
       ["broken", "unknown"],
       ["dinner", "none"],
     ]);
-    expect(analyze).toHaveBeenCalledTimes(3);
+    expect(analyzeBatch).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(analyzeBatch).mock.calls[0][0].map((i) => i.id)).toEqual(["conf", "broken", "gig"]);
+    expect(analyze).not.toHaveBeenCalled();
     expect(alerts[0].citations).toEqual([
       { ruleId: "no-paid-gigs-from-us-sources", title: "No paid gigs", name: "9 FAM 402.2", url: "https://fam.state.gov" },
     ]);
@@ -68,13 +74,56 @@ describe("runPipeline", () => {
     expect(alerts[3].verdict).toBeNull();
   });
 
+  it("falls back to per-item analyze (concurrency 2) when the batch call fails", async () => {
+    relevantUnless();
+    vi.mocked(analyzeBatch).mockRejectedValue(new Error("429"));
+    let inFlight = 0;
+    let peak = 0;
+    vi.mocked(analyze).mockImplementation(async (it) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight--;
+      if (it.id === "broken") throw new Error("boom");
+      return verdict(it.id === "gig" ? "high" : "low");
+    });
+
+    const alerts = await runPipeline([item("a"), item("broken"), item("gig"), item("b")], profile);
+
+    expect(analyze).toHaveBeenCalledTimes(4);
+    expect(peak).toBeLessThanOrEqual(FALLBACK_CONCURRENCY);
+    expect(alerts.map((a) => [a.item.id, a.risk])).toEqual([
+      ["gig", "high"],
+      ["a", "low"],
+      ["b", "low"],
+      ["broken", "unknown"],
+    ]);
+  });
+
+  it("uses a single analyze call (no batch) when only one item needs analysis", async () => {
+    relevantUnless();
+    vi.mocked(analyze).mockResolvedValue(verdict("medium"));
+    const alerts = await runPipeline([item("one")], profile);
+    expect(analyzeBatch).not.toHaveBeenCalled();
+    expect(analyze).toHaveBeenCalledTimes(1);
+    expect(alerts[0].risk).toBe("medium");
+  });
+
+  it("maps a single-item analyze failure to unknown", async () => {
+    relevantUnless();
+    vi.mocked(analyze).mockRejectedValue(new Error("down"));
+    const alerts = await runPipeline([item("one")], profile);
+    expect(alerts[0].risk).toBe("unknown");
+    expect(alerts[0].error).toBeTruthy();
+  });
+
   it("truncates bodies before any model call", async () => {
-    vi.mocked(triage).mockResolvedValue({ relevant: true, category: "other", reason: "" });
-    vi.mocked(analyze).mockResolvedValue(verdict("none"));
-    const alerts = await runPipeline([item("long", "x".repeat(5000))], profile);
+    relevantUnless();
+    vi.mocked(analyzeBatch).mockResolvedValue(new Map());
+    const alerts = await runPipeline([item("long", "x".repeat(5000)), item("short")], profile);
     expect(vi.mocked(triage).mock.calls[0][0].body.length).toBe(MAX_BODY_CHARS);
-    expect(vi.mocked(analyze).mock.calls[0][0].body.length).toBe(MAX_BODY_CHARS);
-    expect(alerts[0].item.body.length).toBe(MAX_BODY_CHARS);
+    expect(vi.mocked(analyzeBatch).mock.calls[0][0][0].body.length).toBe(MAX_BODY_CHARS);
+    expect(alerts.find((a) => a.item.id === "long")!.item.body.length).toBe(MAX_BODY_CHARS);
   });
 
   it("fails open when triage throws", async () => {
@@ -86,10 +135,18 @@ describe("runPipeline", () => {
   });
 
   it("always analyzes user actions even when triage says irrelevant", async () => {
-    vi.mocked(triage).mockResolvedValue({ relevant: false, category: "other", reason: "" });
+    relevantUnless("act");
     vi.mocked(analyze).mockResolvedValue(verdict("medium"));
     const alerts = await runPipeline([item("act", "Can I go to Canada?", "action")], profile);
     expect(alerts[0].risk).toBe("medium");
+  });
+
+  it("makes no Gemini call when nothing is relevant", async () => {
+    relevantUnless("a", "b");
+    const alerts = await runPipeline([item("a"), item("b")], profile);
+    expect(analyze).not.toHaveBeenCalled();
+    expect(analyzeBatch).not.toHaveBeenCalled();
+    expect(alerts.every((a) => a.risk === "none")).toBe(true);
   });
 });
 
@@ -110,15 +167,13 @@ describe("mapLimit", () => {
 });
 
 describe("parseProfile", () => {
-  it("accepts a valid profile and drops junk fields", async () => {
-    const { parseProfile } = await import("./pipeline");
+  it("accepts a valid profile and drops junk fields", () => {
     expect(parseProfile({ visaType: "B1/B2", entryDate: "2026-08-01", admitUntil: "bad", x: 1 })).toEqual({
       visaType: "B1/B2",
       entryDate: "2026-08-01",
     });
   });
-  it("rejects missing or invalid visa/entry date", async () => {
-    const { parseProfile } = await import("./pipeline");
+  it("rejects missing or invalid visa/entry date", () => {
     expect(parseProfile(null)).toBeNull();
     expect(parseProfile({ visaType: "F1", entryDate: "2026-08-01" })).toBeNull();
     expect(parseProfile({ visaType: "VWP", entryDate: "Aug 1" })).toBeNull();

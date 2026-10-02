@@ -1,6 +1,6 @@
 import { ThinkingLevel, Type, type Schema, type ThinkingConfig } from "@google/genai";
 import type { InboxItem, Profile, RuleScope, Verdict, VisaType } from "@/lib/types";
-import { getAI, geminiModel, ANALYZE_TIMEOUT_MS } from "@/lib/ai/client";
+import { ANALYZE_BATCH_TIMEOUT_MS, ANALYZE_TIMEOUT_MS, generateWithFallback, geminiModels } from "@/lib/ai/client";
 import { parseModelJson } from "@/lib/ai/json";
 import { VISITOR_RULES, rulesForPrompt } from "@/lib/rules/visitorRules";
 
@@ -28,6 +28,26 @@ const VERDICT_SCHEMA: Schema = {
   },
   required: ["risk", "title", "explanation", "ruleIds", "whatToDoInstead"],
   propertyOrdering: ["risk", "title", "explanation", "ruleIds", "whatToDoInstead", "suggestedReply"],
+};
+
+const BATCH_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    verdicts: {
+      type: Type.ARRAY,
+      description: "Exactly one verdict per input item, in input order.",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING, description: "The item id exactly as given in the input." },
+          ...VERDICT_SCHEMA.properties,
+        },
+        required: ["id", ...(VERDICT_SCHEMA.required ?? [])],
+        propertyOrdering: ["id", ...(VERDICT_SCHEMA.propertyOrdering ?? [])],
+      },
+    },
+  },
+  required: ["verdicts"],
 };
 
 /** Map the user's visa type to the rule scopes used in the prompt. */
@@ -151,20 +171,56 @@ function thinkingFor(model: string): ThinkingConfig | undefined {
   return /^gemini-3(\.\d+)?-flash(?!-lite)/.test(model) ? { thinkingLevel: ThinkingLevel.LOW } : undefined;
 }
 
-/** Gemini structured verdict. Throws on failure; the pipeline turns that into risk "unknown". */
+/** Gemini structured verdict for one item. Throws on failure; the pipeline turns that into "unknown". */
 export async function analyze(item: InboxItem, profile: Profile): Promise<Verdict> {
-  const model = geminiModel();
-  const res = await getAI().models.generateContent({
-    model,
-    contents: buildUserContent(item),
-    config: {
-      systemInstruction: buildSystemInstruction(profile),
-      responseMimeType: "application/json",
-      responseSchema: VERDICT_SCHEMA,
-      temperature: 0.2,
-      thinkingConfig: thinkingFor(model),
-      httpOptions: { timeout: ANALYZE_TIMEOUT_MS },
-    },
-  });
+  const systemInstruction = buildSystemInstruction(profile);
+  const { res } = await generateWithFallback(geminiModels(), { contents: buildUserContent(item) }, (model) => ({
+    systemInstruction,
+    responseMimeType: "application/json",
+    responseSchema: VERDICT_SCHEMA,
+    temperature: 0.2,
+    thinkingConfig: thinkingFor(model),
+    httpOptions: { timeout: ANALYZE_TIMEOUT_MS },
+  }));
   return validateVerdict(parseModelJson<unknown>(res.text ?? ""));
+}
+
+function buildBatchContent(items: InboxItem[]): string {
+  return [
+    `There are ${items.length} items below. Judge EACH item independently and return one verdict per item in "verdicts", copying its id exactly.`,
+    "",
+    ...items.map((item) => `### ITEM id=${item.id}\n${buildUserContent(item)}\n`),
+  ].join("\n");
+}
+
+/**
+ * ONE Gemini call for many items (keeps a scan within free-tier per-minute quotas).
+ * Returns verdicts keyed by item id; items missing or invalid in the response are absent
+ * from the map. Throws if the call itself fails.
+ */
+export async function analyzeBatch(items: InboxItem[], profile: Profile): Promise<Map<string, Verdict>> {
+  const out = new Map<string, Verdict>();
+  if (items.length === 0) return out;
+  const systemInstruction = buildSystemInstruction(profile);
+  const wanted = new Set(items.map((i) => i.id));
+  const { res } = await generateWithFallback(geminiModels(), { contents: buildBatchContent(items) }, (model) => ({
+    systemInstruction,
+    responseMimeType: "application/json",
+    responseSchema: BATCH_SCHEMA,
+    temperature: 0.2,
+    thinkingConfig: thinkingFor(model),
+    httpOptions: { timeout: ANALYZE_BATCH_TIMEOUT_MS },
+  }));
+  const parsed = parseModelJson<{ verdicts?: unknown }>(res.text ?? "");
+  if (!Array.isArray(parsed.verdicts)) throw new Error("batch response has no verdicts array");
+  for (const entry of parsed.verdicts) {
+    const id = (entry as { id?: unknown })?.id;
+    if (typeof id !== "string" || !wanted.has(id) || out.has(id)) continue;
+    try {
+      out.set(id, validateVerdict(entry));
+    } catch (err) {
+      console.error(`[analyzeBatch] invalid verdict for ${id}:`, (err as Error).message);
+    }
+  }
+  return out;
 }
