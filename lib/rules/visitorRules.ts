@@ -10,11 +10,11 @@ const FAM_302_11 = "https://fam.state.gov/fam/09FAM/09FAM030211.html";
 const CFR_214_1 = "https://www.ecfr.gov/current/title-8/chapter-I/subchapter-B/part-214/section-214.1";
 const CFR_214_2 = "https://www.ecfr.gov/current/title-8/chapter-I/subchapter-B/part-214/section-214.2";
 const CFR_217_3 = "https://www.ecfr.gov/current/title-8/chapter-I/subchapter-B/part-217/section-217.3";
-const USC_1182 = "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title8-section1182&num=0&edition=prelim";
-const USC_1184 = "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title8-section1184&num=0&edition=prelim";
-const USC_1187 = "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title8-section1187&num=0&edition=prelim";
-const USC_1202 = "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title8-section1202&num=0&edition=prelim";
-const USC_1258 = "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title8-section1258&num=0&edition=prelim";
+const USC_1182 = "https://www.govinfo.gov/content/pkg/USCODE-2023-title8/html/USCODE-2023-title8-chap12-subchapII-partII-sec1182.htm";
+const USC_1184 = "https://www.govinfo.gov/content/pkg/USCODE-2023-title8/html/USCODE-2023-title8-chap12-subchapII-partII-sec1184.htm";
+const USC_1187 = "https://www.govinfo.gov/content/pkg/USCODE-2023-title8/html/USCODE-2023-title8-chap12-subchapII-partII-sec1187.htm";
+const USC_1202 = "https://www.govinfo.gov/content/pkg/USCODE-2023-title8/html/USCODE-2023-title8-chap12-subchapII-partIII-sec1202.htm";
+const USC_1258 = "https://www.govinfo.gov/content/pkg/USCODE-2023-title8/html/USCODE-2023-title8-chap12-subchapII-partV-sec1258.htm";
 const CBP_VWP = "https://www.cbp.gov/travel/international-visitors/visa-waiver-program";
 const CBP_ESTA = "https://www.cbp.gov/travel/international-visitors/esta";
 const CBP_I94 = "https://www.cbp.gov/travel/international-visitors/i-94";
@@ -46,7 +46,11 @@ export const VISITOR_RULES: Rule[] = [
       "Ask the company to sponsor a work visa and start only after approval",
       "Limit yourself to permitted business visitor activities (meetings, negotiations, conferences)",
     ],
-    citation: { name: "8 CFR 214.1(e); INA 101(a)(15)(B) — visitors may not engage in employment", url: CFR_214_1 },
+    citation: {
+      name: "8 CFR 214.1(e); INA 101(a)(15)(B) — visitors may not engage in employment",
+      url: CFR_214_1 + "#p-214.1(e)(1)",
+      quote: "in a class defined in section 101(a)(15)(B) of the Act as a temporary visitor for pleasure, or section 101(a)(15)(C) of the Act as an alien in transit through this country, may not engage in any employment",
+    },
   },
   {
     id: "no-paid-gigs-from-us-sources",
@@ -65,7 +69,11 @@ export const VISITOR_RULES: Rule[] = [
       "Ask whether the payment can be limited to documented travel/lodging reimbursement",
       "Take freelance work only once you have left the U.S. (and check your home-country rules)",
     ],
-    citation: { name: "9 FAM 402.2-5(F)(1) — no salary from a U.S. source; only incidental expenses", url: FAM_402_2 },
+    citation: {
+      name: "9 FAM 402.2-5(F)(1) — no salary from a U.S. source; only incidental expenses",
+      url: FAM_402_2,
+      quote: "A nonimmigrant in B-1 status may not receive a salary from a U.S. source for services rendered in connection with their activities in the United States.",
+    },
   },
   {
     id: "permitted-business-activities",
@@ -83,7 +91,11 @@ export const VISITOR_RULES: Rule[] = [
       "Keep activities to meetings, events, and negotiations; do the hands-on work after you leave",
       "Carry a letter from your foreign employer describing the business purpose of the trip",
     ],
-    citation: { name: "9 FAM 402.2-5(B) — commercial transactions, negotiations, consultations, conferences", url: FAM_402_2 },
+    citation: {
+      name: "9 FAM 402.2-5(B) — commercial transactions, negotiations, consultations, conferences",
+      url: FAM_402_2,
+      quote: "Engage in commercial transactions which do not involve gainful employment in the United States (such as a merchant who takes orders for goods manufactured abroad);",
+    },
   },
   {
     id: "honoraria-212q",
@@ -102,7 +114,11 @@ export const VISITOR_RULES: Rule[] = [
       "Ask a for-profit host to cover only documented travel and lodging",
       "Track how many institutions have paid you in the last 6 months",
     ],
-    citation: { name: "INA 212(q) (8 U.S.C. 1182(q)); 9 FAM 402.2-5(F)(2)", url: USC_1182 },
+    citation: {
+      name: "INA 212(q) (8 U.S.C. 1182(q)); 9 FAM 402.2-5(F)(2)",
+      url: USC_1182,
+      quote: "Any alien admitted under section 1101(a)(15)(B) of this title may accept an honorarium payment and associated incidental expenses for a usual academic activity or activities (lasting not longer than 9 days at any single institution)",
+    },
   },
   {
     id: "incidental-expense-reimbursement",
@@ -119,7 +135,11 @@ export const VISITOR_RULES: Rule[] = [
       "Ask for reimbursement against receipts rather than a flat fee",
       "Keep receipts and the invitation letter describing what is covered",
     ],
-    citation: { name: "9 FAM 402.2-5(F)(1) — incidental expenses or remuneration", url: FAM_402_2 },
+    citation: {
+      name: "9 FAM 402.2-5(F)(1) — incidental expenses or remuneration",
+      url: FAM_402_2,
+      quote: "A U.S. source, however, may provide the applicant with an expense allowance or reimbursement for expenses incidental to the temporary stay.",
+    },
   },
   {
     id: "remote-work-foreign-employer-gray",
@@ -138,7 +158,11 @@ export const VISITOR_RULES: Rule[] = [
       "Do substantial work blocks after you leave the U.S.",
       "If remote work is a main purpose of the trip, ask an immigration attorney before you travel",
     ],
-    citation: { name: "INA 101(a)(15)(B); 9 FAM 402.2-5(A) — no source directly addresses remote work", url: FAM_402_2 },
+    citation: {
+      name: "INA 101(a)(15)(B); 9 FAM 402.2-5(A) — no source directly addresses remote work",
+      url: FAM_402_2,
+      quote: "Thus, the issuance of a B-1 visa is not appropriate for applicants who intend to obtain and engage in employment while in the United States.",
+    },
   },
   {
     id: "volunteering-limits",
@@ -156,7 +180,11 @@ export const VISITOR_RULES: Rule[] = [
       "Attend as a guest or participant rather than staff",
       "Confirm the organization is a recognized nonprofit and the work is not a normally paid role",
     ],
-    citation: { name: "9 FAM 402.2-5(C)(2) — participants in voluntary service programs", url: FAM_402_2 },
+    citation: {
+      name: "9 FAM 402.2-5(C)(2) — participants in voluntary service programs",
+      url: FAM_402_2,
+      quote: "No salary or remuneration should be paid from a U.S. source, other than an allowance or other reimbursement for expenses incidental to the volunteers’ stay in the United States.",
+    },
   },
   {
     id: "study-limits",
@@ -175,7 +203,11 @@ export const VISITOR_RULES: Rule[] = [
       "B visa holders may ask USCIS for a change of status, and must not start classes until approved",
       "Choose a short recreational, non-credit course",
     ],
-    citation: { name: "8 CFR 214.2(b)(7); 9 FAM 402.2-4(A)(6) — study limits", url: CFR_214_2 },
+    citation: {
+      name: "8 CFR 214.2(b)(7); 9 FAM 402.2-4(A)(6) — study limits",
+      url: CFR_214_2 + "#p-214.2(b)(7)",
+      quote: "violates the conditions of his or her B-1 or B-2 status if the alien enrolls in a course of study",
+    },
   },
   {
     id: "contests-and-prizes-gray",
@@ -194,7 +226,11 @@ export const VISITOR_RULES: Rule[] = [
       "Decline follow-up paid work or contracts tied to the prize",
       "If the amount is significant, ask an immigration attorney before accepting",
     ],
-    citation: { name: "9 FAM 402.2-4(A)(7), 402.2-5(C)(4)(a), 402.2-5(G)(2) — contests and prizes", url: FAM_402_2 },
+    citation: {
+      name: "9 FAM 402.2-4(A)(7), 402.2-5(C)(4)(a), 402.2-5(G)(2) — contests and prizes",
+      url: FAM_402_2,
+      quote: "if the entertainer is coming to the United States to participate in a competition for which there is no remuneration other than a prize (monetary or otherwise) and expenses.",
+    },
   },
   {
     id: "job-interviews-networking",
@@ -212,7 +248,11 @@ export const VISITOR_RULES: Rule[] = [
       "Interview, then have the employer file a work-visa petition; start only after approval",
       "Decline trial work until you are authorized",
     ],
-    citation: { name: "9 FAM 402.2-5(B) — consult with business associates, negotiate contracts", url: FAM_402_2 },
+    citation: {
+      name: "9 FAM 402.2-5(B) — consult with business associates, negotiate contracts",
+      url: FAM_402_2,
+      quote: "Applicants should be classified B-1 visitors for business, if otherwise eligible, if they are traveling to the United States to:",
+    },
   },
   {
     id: "founder-business-activities",
@@ -246,7 +286,11 @@ export const VISITOR_RULES: Rule[] = [
       "Pause and ask what the payment is for; if it is for your services, decline while visiting",
       "Ask for receipt-based expense reimbursement instead",
     ],
-    citation: { name: "9 FAM 402.2-5(I) — nonimmigrants obtaining Social Security cards", url: FAM_402_2 },
+    citation: {
+      name: "9 FAM 402.2-5(I) — nonimmigrants obtaining Social Security cards",
+      url: FAM_402_2,
+      quote: "Although for immigration purposes these activities might not constitute “employment in the United States,” even with a U.S. source of income, the activities might be considered “employment” for other purposes or by other agencies",
+    },
   },
 
   // ---------------------------------------------------------------- VWP stay rules
@@ -259,7 +303,11 @@ export const VISITOR_RULES: Rule[] = [
       "The Visa Waiver Program lets eligible nationals visit for tourism or business (the same kinds of activities as a B visitor) for up to 90 days with an approved ESTA. It does not allow work, study for credit, or long-term residence.",
     examples: ["Sightseeing, visiting friends, attending a conference (OK)", "Moving to the U.S. to job-hunt for months (not OK)"],
     alternatives: ["If your plans exceed tourism/business visiting, apply for the appropriate visa before travel"],
-    citation: { name: "CBP — Visa Waiver Program", url: CBP_VWP },
+    citation: {
+      name: "CBP — Visa Waiver Program",
+      url: CBP_VWP,
+      quote: "permits citizens of 42 countries to travel to the United States for business or tourism for stays of up to 90 days without a visa",
+    },
   },
   {
     id: "vwp-90-day-limit",
@@ -273,7 +321,11 @@ export const VISITOR_RULES: Rule[] = [
       "Book departure on or before your last allowed day and check it on your I-94 record",
       "If you need more than 90 days, leave and apply for a B visa from abroad",
     ],
-    citation: { name: "INA 217(a)(1) (8 U.S.C. 1187); CBP Visa Waiver Program", url: USC_1187 },
+    citation: {
+      name: "INA 217(a)(1) (8 U.S.C. 1187); CBP Visa Waiver Program",
+      url: USC_1187,
+      quote: "The alien is applying for admission during the program as a nonimmigrant visitor (described in section 1101(a)(15)(B) of this title) for a period not exceeding 90 days.",
+    },
   },
   {
     id: "vwp-no-extension-or-change",
@@ -290,7 +342,11 @@ export const VISITOR_RULES: Rule[] = [
       "Leave the U.S. and apply for the right visa at a U.S. consulate",
       "If a genuine emergency (illness, flight cancellation) prevents departure, contact USCIS about satisfactory departure before day 90",
     ],
-    citation: { name: "INA 248(a)(4) (8 U.S.C. 1258); 8 CFR 217.3(a) satisfactory departure", url: USC_1258 },
+    citation: {
+      name: "INA 248(a)(4) (8 U.S.C. 1258); 8 CFR 217.3(a) satisfactory departure",
+      url: USC_1258,
+      quote: "an alien admitted as a nonimmigrant visitor without a visa under section 1182(l) of this title or section 1187 of this title.",
+    },
   },
   {
     id: "vwp-contiguous-territory-clock",
@@ -307,7 +363,11 @@ export const VISITOR_RULES: Rule[] = [
       "Count days from your original VWP admission, including side trips",
       "Plan your final departure to a non-adjacent country before day 90",
     ],
-    citation: { name: "8 CFR 217.3(b) — readmission after departure to contiguous territory", url: CFR_217_3 },
+    citation: {
+      name: "8 CFR 217.3(b) — readmission after departure to contiguous territory",
+      url: CFR_217_3 + "#p-217.3(b)",
+      quote: "may be readmitted to the United States after a departure to foreign contiguous territory or adjacent island for the balance of his or her original Visa Waiver Program admission period",
+    },
   },
   {
     id: "vwp-overstay-loses-eligibility",
@@ -318,7 +378,11 @@ export const VISITOR_RULES: Rule[] = [
       "Anyone who has ever overstayed a VWP admission or violated its terms is no longer eligible for the VWP and must apply for a visa for future trips.",
     examples: ["Leaving one day late after a 90-day ESTA stay", "Working during a VWP visit"],
     alternatives: ["Leave on time; if an emergency arises, seek satisfactory departure before day 90"],
-    citation: { name: "INA 217(a)(7) (8 U.S.C. 1187)", url: USC_1187 },
+    citation: {
+      name: "INA 217(a)(7) (8 U.S.C. 1187)",
+      url: USC_1187,
+      quote: "If the alien previously was admitted without a visa under this section, the alien must not have failed to comply with the conditions of any previous admission as such a nonimmigrant.",
+    },
   },
   {
     id: "vwp-waiver-of-review",
@@ -329,7 +393,11 @@ export const VISITOR_RULES: Rule[] = [
       "As a condition of VWP admission you waived the right to review or appeal an officer's admissibility decision and to contest removal (except asylum). If CBP or ICE decides you violated the terms, you can be removed quickly without a hearing.",
     examples: ["Being refused entry after telling CBP you plan to freelance", "Removal after unauthorized work is discovered"],
     alternatives: ["Answer CBP truthfully and keep activities within VWP purposes"],
-    citation: { name: "INA 217(b) (8 U.S.C. 1187(b)) — waiver of rights", url: USC_1187 },
+    citation: {
+      name: "INA 217(b) (8 U.S.C. 1187(b)) — waiver of rights",
+      url: USC_1187,
+      quote: "An alien may not be provided a waiver under the program unless the alien has waived any right—",
+    },
   },
   {
     id: "vwp-esta-validity",
@@ -340,7 +408,11 @@ export const VISITOR_RULES: Rule[] = [
       "An approved ESTA is generally valid for two years or until your passport expires, whichever comes first. A new passport needs a new ESTA. ESTA approval does not guarantee admission; the CBP officer decides at the border.",
     examples: ["Traveling on a renewed passport with the old ESTA", "Assuming ESTA lets you stay as long as it is valid"],
     alternatives: ["Check ESTA status before each trip and reapply after a passport renewal"],
-    citation: { name: "CBP — ESTA", url: CBP_ESTA },
+    citation: {
+      name: "CBP — ESTA",
+      url: CBP_ESTA,
+      quote: "Authorization via ESTA does not determine whether a traveler is admissible to the United States.",
+    },
   },
 
   // ---------------------------------------------------------------- B visa stay rules
@@ -356,7 +428,11 @@ export const VISITOR_RULES: Rule[] = [
       "Not checking the I-94 and missing an admit-until date shorter than expected",
     ],
     alternatives: ["Look up your I-94 at i94.cbp.dhs.gov after every entry", "Plan departure on or before the admit-until date"],
-    citation: { name: "CBP — I-94 Arrival/Departure Record", url: CBP_I94 },
+    citation: {
+      name: "CBP — I-94 Arrival/Departure Record",
+      url: CBP_I94,
+      quote: "Unexpired I-94s issued in the current numeric-only format will continue to be valid until the Admit Until Date printed on the paper I-94 and/or the date displayed on the I-94 website.",
+    },
   },
   {
     id: "b2-extension-i539",
@@ -370,7 +446,11 @@ export const VISITOR_RULES: Rule[] = [
       "File I-539 well before the admit-until date with evidence of why you need more time and funds to support yourself",
       "Otherwise depart on time",
     ],
-    citation: { name: "USCIS — Extend Your Stay; 8 CFR 214.2(b)(1)", url: USCIS_EXTEND },
+    citation: {
+      name: "USCIS — Extend Your Stay; 8 CFR 214.2(b)(1)",
+      url: USCIS_EXTEND,
+      quote: "We recommend that you apply to extend your stay at least 45 days before your authorized stay expires.",
+    },
   },
   {
     id: "b-change-of-status",
@@ -381,7 +461,11 @@ export const VISITOR_RULES: Rule[] = [
       "B visitors may be able to apply to USCIS to change to another status (for example F-1) if they are still in status and have not violated its terms. You must not start the new activity (classes, work) until USCIS approves.",
     examples: ["Starting classes while a B-to-F-1 change of status is pending", "Accepting a job before an H-1B change of status is approved"],
     alternatives: ["Wait for approval before starting the new activity, or apply for the new visa from abroad"],
-    citation: { name: "USCIS — Change My Nonimmigrant Status", url: USCIS_CHANGE },
+    citation: {
+      name: "USCIS — Change My Nonimmigrant Status",
+      url: USCIS_CHANGE,
+      quote: "Until you receive approval from USCIS, do not assume the status has been approved, and do not change your activity in the United States.",
+    },
   },
   {
     id: "visa-voidance-222g",
@@ -392,7 +476,11 @@ export const VISITOR_RULES: Rule[] = [
       "If you stay even one day beyond your authorized period, your visa is automatically void. You generally must then apply for any new visa in your country of nationality, which is slower and harder.",
     examples: ["Leaving a day after your I-94 admit-until date", "Staying past the I-94 date while waiting on a late extension request"],
     alternatives: ["Depart on time or file a timely extension (I-539) before your I-94 date"],
-    citation: { name: "INA 222(g) (8 U.S.C. 1202(g))", url: USC_1202 },
+    citation: {
+      name: "INA 222(g) (8 U.S.C. 1202(g))",
+      url: USC_1202,
+      quote: "remained in the United States beyond the period of stay authorized by the Attorney General, such visa shall be void beginning after the conclusion of such period of stay.",
+    },
   },
 
   // ---------------------------------------------------------------- Applies to everyone
@@ -405,7 +493,11 @@ export const VISITOR_RULES: Rule[] = [
       "Time in the U.S. after your authorized stay ends counts as unlawful presence. More than 180 days but less than one year, followed by voluntary departure before removal proceedings begin, triggers a 3-year bar on returning; one year or more (then departing or being removed) triggers a 10-year bar.",
     examples: ["Staying 7 months past your I-94 date, then leaving", "Overstaying a 90-day VWP admission by months"],
     alternatives: ["Track your last allowed day and depart before it", "Speak to an immigration attorney immediately if you have already overstayed"],
-    citation: { name: "INA 212(a)(9)(B) (8 U.S.C. 1182(a)(9)(B)); USCIS unlawful presence", url: USCIS_UNLAWFUL },
+    citation: {
+      name: "INA 212(a)(9)(B) (8 U.S.C. 1182(a)(9)(B)); USCIS unlawful presence",
+      url: USCIS_UNLAWFUL,
+      quote: "Seek admission again within 3 years of leaving the United States before removal proceedings begin, after you accrued more than 180 days but less than 1 year of unlawful presence during a single stay;",
+    },
   },
   {
     id: "misrepresentation",
@@ -419,7 +511,11 @@ export const VISITOR_RULES: Rule[] = [
       "Answering \"no\" to the ESTA question about prior overstays when you have one",
     ],
     alternatives: ["Answer every question truthfully", "If your plans do not fit visitor status, apply for the correct visa"],
-    citation: { name: "INA 212(a)(6)(C)(i) (8 U.S.C. 1182); 9 FAM 302.9", url: FAM_302_9 },
+    citation: {
+      name: "INA 212(a)(6)(C)(i) (8 U.S.C. 1182); 9 FAM 302.9",
+      url: FAM_302_9,
+      quote: "any alien who by fraud or willfully misrepresenting a material fact seeks to procure (or sought to procure or has procured) a visa, other documentation, or admission into the United States",
+    },
   },
   {
     id: "ninety-day-rule-inconsistent-conduct",
@@ -433,7 +529,11 @@ export const VISITOR_RULES: Rule[] = [
       "Enrolling in a full-time program a month after arriving on ESTA",
     ],
     alternatives: ["Only do what you declared at entry", "Consult an immigration attorney before any change of plans"],
-    citation: { name: "9 FAM 302.9-4(B)(3)(g) — 90-day rule (inconsistent conduct)", url: FAM_302_9 },
+    citation: {
+      name: "9 FAM 302.9-4(B)(3)(g) — 90-day rule (inconsistent conduct)",
+      url: FAM_302_9,
+      quote: "If an individual engages in conduct inconsistent with their nonimmigrant status within 90 days of visa application or admission to the United States, as described in subparagraph (2)(b) below, you may presume that the applicant made a willful misrepresentation",
+    },
   },
   {
     id: "immigrant-intent",
@@ -451,7 +551,11 @@ export const VISITOR_RULES: Rule[] = [
       "Keep proof of ties at home (job, lease, return ticket)",
       "If you want to live in the U.S., pursue the right immigrant or work visa",
     ],
-    citation: { name: "INA 214(b) (8 U.S.C. 1184(b)) — presumption of immigrant intent", url: USC_1184 },
+    citation: {
+      name: "INA 214(b) (8 U.S.C. 1184(b)) — presumption of immigrant intent",
+      url: USC_1184,
+      quote: "shall be presumed to be an immigrant until he establishes to the satisfaction of the consular officer",
+    },
   },
   {
     id: "unlawful-activity",
@@ -462,7 +566,11 @@ export const VISITOR_RULES: Rule[] = [
       "Visitor status assumes lawful activity. Unlawful or criminal conduct, including unlawful employment, can lead to removal, visa revocation, and future inadmissibility.",
     examples: ["Working \"under the table\" for cash", "Any criminal arrest during your visit"],
     alternatives: ["Stay within the activities permitted for visitors", "Speak to an attorney immediately if you are arrested or charged"],
-    citation: { name: "9 FAM 402.2-2(E) — unlawful activity while in visitor status", url: FAM_402_2 },
+    citation: {
+      name: "9 FAM 402.2-2(E) — unlawful activity while in visitor status",
+      url: FAM_402_2,
+      quote: "Therefore, an application for a visitor visa must be denied in those cases where you have reason to believe or know that, while in the United States as a visitor, the applicant will engage in unlawful or criminal activities.",
+    },
   },
   {
     id: "unlawful-presence-overview",
@@ -473,7 +581,11 @@ export const VISITOR_RULES: Rule[] = [
       "Unlawful presence generally begins the day after your authorized stay ends (your I-94 admit-until date, or day 90 for VWP). For B visitors, time while a timely, non-frivolous extension or change of status request is pending counts as a period of authorized stay for both the 3- and 10-year bars, provided you have not worked without authorization (VWP travelers cannot file one).",
     examples: ["Assuming a late extension request stops the clock", "Not knowing your last authorized day"],
     alternatives: ["Know your exact last day", "File any extension request before that day"],
-    citation: { name: "9 FAM 302.11-3(B)(5) — unlawful presence; pending extension/change of status", url: FAM_302_11 },
+    citation: {
+      name: "9 FAM 302.11-3(B)(5) — unlawful presence; pending extension/change of status",
+      url: FAM_302_11,
+      quote: "For the entire period of the pendency of the EOS or COS application if, in addition to the requirements above, the individual has not failed to maintain their status prior to the filing of the application for EOS or COS.",
+    },
   },
 ];
 
