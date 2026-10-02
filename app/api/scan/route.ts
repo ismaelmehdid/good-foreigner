@@ -36,7 +36,13 @@ export async function POST(request: Request) {
     try {
       items = await fetchInbox(match[1].trim());
     } catch (err) {
-      if (err instanceof GmailAuthError) return error(401, "gmail_unauthorized");
+      if (err instanceof GmailAuthError) {
+        if (err.status === 403) {
+          console.error("[api/scan] gmail forbidden:", err.message);
+          return error(403, "gmail_forbidden");
+        }
+        return error(401, "gmail_unauthorized");
+      }
       console.error("[api/scan] gmail fetch failed:", (err as Error).message);
       return error(500, "gmail_fetch_failed");
     }

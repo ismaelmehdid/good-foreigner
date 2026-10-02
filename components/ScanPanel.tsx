@@ -110,6 +110,18 @@ export default function ScanPanel({
     setState({ kind: "loading", mode });
     try {
       const { status, ok, data } = await postScan(profile, today, mode, tokenOverride ?? token);
+      if (status === 403) {
+        setToken(null);
+        setGmailKey((k) => k + 1);
+        setState({
+          kind: "error",
+          mode,
+          message:
+            "Gmail refused access. Reconnect and make sure you tick the box that lets Good Foreigner read your email.",
+          expired: true,
+        });
+        return;
+      }
       if (status === 401) {
         setToken(null);
         setGmailKey((k) => k + 1);

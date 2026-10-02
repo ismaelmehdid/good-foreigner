@@ -103,7 +103,12 @@ async function gmailGet<T>(url: string, token: string): Promise<T> {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
-  if (res.status === 401 || res.status === 403) throw new GmailAuthError(res.status);
+  if (res.status === 401 || res.status === 403) {
+    // 403 usually means the Gmail API is disabled for the project or the user did not grant the
+    // gmail.readonly scope; keep Google's message so the server log says which.
+    const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+    throw new GmailAuthError(res.status, body?.error?.message ?? undefined);
+  }
   if (!res.ok) throw new Error(`Gmail API request failed with status ${res.status}`);
   return (await res.json()) as T;
 }
