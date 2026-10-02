@@ -113,12 +113,21 @@ async function gmailGet<T>(url: string, token: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function fetchInbox(token: string, max = 15): Promise<InboxItem[]> {
+/**
+ * Recent inbox messages as InboxItems. Ids in `skipIds` (already analyzed by this client)
+ * are listed but not fetched, so a watch poll with nothing new costs one list call.
+ */
+export async function fetchInbox(
+  token: string,
+  max = 15,
+  skipIds?: ReadonlySet<string>,
+): Promise<InboxItem[]> {
   const list = await gmailGet<GmailListResponse>(
     `${GMAIL_API}/messages?maxResults=${max}&labelIds=INBOX&q=newer_than:30d`,
     token,
   );
-  const ids = (list.messages ?? []).map((m) => m.id);
+  const ids = (list.messages ?? []).map((m) => m.id).filter((id) => !skipIds?.has(id));
+  if (ids.length === 0) return [];
 
   const messages = await Promise.all(
     ids.map((id) => gmailGet<GmailMessage>(`${GMAIL_API}/messages/${encodeURIComponent(id)}?format=full`, token)),

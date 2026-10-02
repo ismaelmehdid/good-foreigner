@@ -138,4 +138,49 @@ describe("fetchInbox", () => {
     expect(err).not.toBeInstanceOf(GmailAuthError);
     expect(String((err as Error).message)).toMatch(/500/);
   });
+
+  describe("skipIds", () => {
+    function listThen(ids: string[]) {
+      return vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes("/messages?")) return json({ messages: ids.map((id) => ({ id })) });
+        const id = url.match(/\/messages\/([^?]+)\?format=full/)?.[1] ?? "";
+        return json({
+          id,
+          snippet: `snippet ${id}`,
+          payload: { mimeType: "text/plain", headers: [{ name: "Subject", value: `S ${id}` }], body: {} },
+        });
+      });
+    }
+
+    it("fetches only ids not in skipIds, keeping list order", async () => {
+      const fetchMock = listThen(["a", "b", "c"]);
+      vi.stubGlobal("fetch", fetchMock);
+
+      const items = await fetchInbox("tok", 15, new Set(["b"]));
+
+      expect(items.map((i) => i.id)).toEqual(["a", "c"]);
+      const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+      expect(urls[0]).toBe(
+        "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=15&labelIds=INBOX&q=newer_than:30d",
+      );
+      expect(urls.some((u) => u.includes("/messages/b?"))).toBe(false);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it("returns [] after only the list call when every id was already seen", async () => {
+      const fetchMock = listThen(["a", "b"]);
+      vi.stubGlobal("fetch", fetchMock);
+
+      expect(await fetchInbox("tok", 15, new Set(["a", "b"]))).toEqual([]);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("fetches everything when skipIds is empty or omitted", async () => {
+      const fetchMock = listThen(["a", "b"]);
+      vi.stubGlobal("fetch", fetchMock);
+      expect((await fetchInbox("tok", 15, new Set())).map((i) => i.id)).toEqual(["a", "b"]);
+      expect((await fetchInbox("tok")).map((i) => i.id)).toEqual(["a", "b"]);
+    });
+  });
 });
