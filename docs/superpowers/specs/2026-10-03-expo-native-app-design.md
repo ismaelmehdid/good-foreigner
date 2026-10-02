@@ -1,7 +1,8 @@
 # Good Foreigner native app (Expo) — design + 1-hour plan
 
 Status: approved idea, to build after the hackathon. Budget: **60 minutes of build time** for the core
-app, run by the lead with an agent team. Native remote push is a separate, optional 45-minute phase.
+app, run by the lead with an agent team. No Xcode or Android Studio: the app runs in **Expo Go** on the
+user's own phone. Native remote push is a separate, optional 45-minute phase built in the cloud with EAS.
 
 ## Goal
 
@@ -49,7 +50,7 @@ store submission, monorepo restructuring.
 | Visa choice | `@expo/ui` Picker (SwiftUI on iOS) — fallback: large `Pressable` cards if `@expo/ui` misbehaves |
 | Dates | `@react-native-community/datetimepicker` (inline iOS calendar) |
 | Lists | `FlatList` with section headers, `RefreshControl` |
-| Google sign-in | `@react-native-google-signin/google-signin`: `configure({ iosClientId, webClientId, scopes: ["https://www.googleapis.com/auth/gmail.readonly"] })`, `signIn()`, `getTokens()` → `accessToken` used as the Gmail Bearer token |
+| Google sign-in | Expo Go cannot load `@react-native-google-signin`. Phase 1 uses a **web handoff**: `expo-web-browser` `openAuthSessionAsync("https://<cloud run>/api/mobile/auth/start?redirect=<Linking.createURL('auth')>")` → Google OAuth (authorization code, existing web client) → `/api/mobile/auth/callback` exchanges the code with the client secret → redirects to the app link with a short-lived Gmail access token, email and name. Phase 2 switches to native sign-in in the dev build. |
 | Storage | `expo-secure-store` (user, profile) |
 | Notifications | `expo-notifications` (local), `expo-haptics` |
 | Links | `expo-web-browser` |
@@ -68,30 +69,40 @@ good-foreigner/
     app/(tabs)/{_layout,home,check,settings}.tsx
     app/alert/[id].tsx          ← formSheet
     src/api.ts                  ← fetch wrapper, base URL = Cloud Run URL (env EXPO_PUBLIC_API_URL)
-    src/auth.ts                 ← Google sign-in, token refresh via getTokens()
+    src/auth.ts                 ← web-handoff sign-in (openAuthSessionAsync), parses the returned app link
     src/store.ts                ← secure-store user/profile, in-memory alerts (zustand-free, React context)
     src/notify.ts               ← local notifications + haptics
     src/ui/*                    ← RiskDot, AlertRow, StayCard, Section
     metro.config.js, tsconfig.json, app.json
 ```
 
-## Prerequisites (before the hour starts, done by the user, ~15 min)
+## Where it runs (no Xcode, no Android Studio)
 
-1. Xcode installed with an iOS simulator (the hour is measured on the simulator).
-2. Google Cloud Console → Google Auth Platform → Clients → **Create client → iOS**, bundle ID
-   `app.goodforeigner.mobile`. Note the iOS client ID and its reversed-client-ID URL scheme.
-3. The existing web client ID is reused as `webClientId`.
-4. Your Google account is still a test user on the consent screen.
-5. Optional for a real phone: Expo account (`npx eas-cli login`) and an Apple Developer account.
+- **Phase 1: Expo Go** on the user's iPhone or Android phone. `npx expo start --tunnel` prints a QR
+  code; scanning it opens the app instantly. Every module in Phase 1 (Expo Router, form sheets,
+  datetimepicker, secure-store, web-browser, local notifications, haptics) is available in Expo Go.
+  `@expo/ui` is used only if the installed Expo Go supports it; otherwise large `Pressable` cards.
+- **Phase 2: EAS Build in the cloud** builds the development app (no Xcode). Installing it on an
+  iPhone needs an Apple Developer account ($99/year); an Android APK installs on any Android phone.
+- Expo does not host interactive cloud emulators for custom apps. Expo Snack has an in-browser
+  device preview, but it cannot run this app's sign-in flow, so it is not used.
+
+## Prerequisites (before the hour starts, done by the user, ~5 min)
+
+1. Install **Expo Go** from the App Store / Play Store; phone and laptop on any network (`--tunnel`).
+2. Add `https://good-foreigner-440338055401.us-central1.run.app/api/mobile/auth/callback` to the web
+   OAuth client's **Authorized redirect URIs**.
+3. Your Google account is still a test user on the consent screen.
+4. Phase 2 only: Expo account (`npx eas-cli login`); Apple Developer account for an iPhone build.
 
 ## 60-minute plan (agent team)
 
 | Time | Lead | `mobile-shell` | `mobile-screens` | `mobile-auth` |
 |---|---|---|---|---|
-| 0–10 | Create `mobile/` with `npx create-expo-app@latest mobile`, install deps, Metro/tsconfig shared paths, `app.json` (bundle id, Google sign-in plugin with URL scheme), commit | — | — | — |
-| 10–35 | Review, unblock | Routing skeleton, tabs, formSheet route, `src/api.ts`, `src/store.ts` context | Welcome, onboarding screens, Home list, alert sheet, Check, Settings (against `src/store.ts` interface) | `src/auth.ts` (sign-in, getTokens, sign-out), `src/notify.ts` (permission, local alerts, haptics) |
-| 35–50 | `npx expo run:ios` on the simulator, integrate, fix type errors | Fix integration bugs | Fix UI on simulator screenshots | Verify sign-in on simulator with the test account |
-| 50–60 | End-to-end on simulator: sign in → onboarding → sample inbox → alert sheet → local notification; `npx tsc --noEmit`; commit | — | — | — |
+| 0–10 | Create `mobile/` with `npx create-expo-app@latest mobile`, install deps, Metro/tsconfig shared paths, `app.json` (scheme `goodforeigner`, bundle id), commit | — | — | — |
+| 10–35 | Review, unblock | Routing skeleton, tabs, formSheet route, `src/api.ts`, `src/store.ts` context | Welcome, onboarding screens, Home list, alert sheet, Check, Settings (against `src/store.ts` interface) | Server: `app/api/mobile/auth/{start,callback}/route.ts` (state check, redirect allow-list `exp://` / `goodforeigner://`, code exchange); app: `src/auth.ts`, `src/notify.ts` |
+| 35–50 | Deploy the two auth routes to Cloud Run; `npx expo start --tunnel`, open in Expo Go on the phone, integrate, fix type errors | Fix integration bugs | Fix UI from phone screenshots | Verify sign-in on the phone with the test account |
+| 50–60 | End-to-end on the phone: sign in → onboarding → sample inbox → alert sheet → local notification; `npx tsc --noEmit`; commit | — | — | — |
 
 Interfaces fixed at minute 10 (so the three agents work in parallel):
 
@@ -108,7 +119,7 @@ postScan(body, token?): Promise<ScanResponse>; postCheck(body): Promise<CheckRes
 requestPermission(): Promise<boolean>; notifyAlerts(alerts: Alert[]): Promise<number>;
 ```
 
-Definition of done: on the iOS simulator, a test user signs in with Google, finishes onboarding, scans
+Definition of done: in Expo Go on the user's phone, a test user signs in with Google, finishes onboarding, scans
 the sample inbox and their Gmail, opens an alert in a half-height native sheet, taps an official
 source, and receives a local notification for each risky alert.
 
@@ -116,14 +127,15 @@ source, and receives a local notification for each risky alert.
 
 Push even when the app is closed, reusing today's Gmail → Pub/Sub → Cloud Run pipeline:
 
-1. App: `GoogleSignin.configure({ offlineAccess: true, webClientId })` → `serverAuthCode`;
-   `Notifications.getExpoPushTokenAsync()` (physical device only).
-2. Server: `/api/realtime/enable` accepts `{ serverAuthCode, expoPushToken }` in addition to the web
-   body; the code exchange uses `redirect_uri: ""` for native codes; `RealtimeUser` stores
-   `expoPushTokens: string[]`.
+1. App: `Notifications.getExpoPushTokenAsync()` (needs the EAS development build, not Expo Go).
+   The Phase 1 auth callback already exchanges a code on the server, so it can store the encrypted
+   refresh token and start the Gmail watch exactly like `/api/realtime/enable`.
+2. Server: `RealtimeUser` stores `expoPushTokens: string[]`; a new `POST /api/mobile/push-token`
+   registers the token for the signed-in user.
 3. Server: `lib/realtime/expoPush.ts` sends via `POST https://exp.host/--/api/v2/push/send` with the
    same title/body rules; the push handler sends to both Web Push subscriptions and Expo tokens.
-4. Build with `eas build --profile development --platform ios` and install on the phone.
+4. Build in the cloud with `eas build --profile development --platform ios` (or `android`) and
+   install on the phone from the EAS link.
 
 ## Before a public launch (not part of the hour)
 
