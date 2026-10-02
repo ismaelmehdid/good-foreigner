@@ -50,6 +50,13 @@ Next.js API on Cloud Run
 - `lib/stay/stayCalculator.ts` — deterministic stay math, no AI.
 - `lib/gmail/` — Gmail REST fetch and the read-only token flow.
 
+## Real-time alerts (even when the app is closed)
+
+Gmail `users.watch` → Pub/Sub topic `gmail-inbox` → push subscription → Cloud Run
+`/api/gmail/push` → new INBOX messages via `users.history.list` → Gemma 4 triage → Gemini verdict →
+Web Push (VAPID) → service worker → phone notification. See
+`docs/superpowers/specs/2026-10-02-realtime-design.md`.
+
 ## AI models
 
 | Model | Role | License / terms |
@@ -67,8 +74,10 @@ Artifact Registry.
 ## Privacy and responsible AI
 
 - **Read-only Gmail scope.** The access token stays in browser memory and is never stored.
-- **Nothing is persisted by this app.** Email bodies are never stored; the profile lives only in
-  your browser. Recent inbox emails are sent to Google's Gemini API for analysis. Use a
+- **Minimal storage.** Email bodies are never stored; the profile lives in your browser. Only if
+  you turn on real-time alerts does the server keep an AES-256-GCM–encrypted read-only Gmail
+  refresh token, your push subscription and processed message ids (Firestore); turning alerts off
+  deletes them. Recent inbox emails are sent to Google's Gemini API for analysis. Use a
   billing-enabled (paid tier) API key so that content is not used to improve Google's products.
 - **Data minimization.** Gemma 4 screens every item first; only immigration-relevant items go on to
   the larger Gemini model. Because Gemma is open-weight, this screening step could later run fully

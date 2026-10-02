@@ -133,12 +133,34 @@ export async function fetchInbox(
     ids.map((id) => gmailGet<GmailMessage>(`${GMAIL_API}/messages/${encodeURIComponent(id)}?format=full`, token)),
   );
 
-  return messages.map((msg) => ({
+  return messages.map(toInboxItem);
+}
+
+function toInboxItem(msg: GmailMessage): InboxItem {
+  return {
     id: msg.id,
-    source: "email" as const,
+    source: "email",
     from: header(msg.payload, "From"),
     subject: header(msg.payload, "Subject"),
     date: header(msg.payload, "Date"),
     body: (msg.payload ? extractPlainText(msg.payload) : "") || msg.snippet || "",
-  }));
+  };
+}
+
+/**
+ * Specific messages by id, in the given order (used by real-time push). Messages that can no
+ * longer be fetched (e.g. deleted → 404) are skipped; auth errors still throw GmailAuthError.
+ */
+export async function fetchMessages(token: string, ids: string[]): Promise<InboxItem[]> {
+  const messages = await Promise.all(
+    ids.map(async (id) => {
+      try {
+        return await gmailGet<GmailMessage>(`${GMAIL_API}/messages/${encodeURIComponent(id)}?format=full`, token);
+      } catch (err) {
+        if (err instanceof GmailAuthError) throw err;
+        return null;
+      }
+    }),
+  );
+  return messages.filter((m): m is GmailMessage => m !== null).map(toInboxItem);
 }

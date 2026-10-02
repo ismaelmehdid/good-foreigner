@@ -149,7 +149,7 @@ export default function ActionChecker({ profile, today }: { profile: Profile; to
             </p>
           ) : (
             <p className="order-2 text-xs text-stone-500 sm:order-1 dark:text-stone-400">
-              This app stores nothing. Answers cite official sources.
+              Nothing you type is stored. Answers cite official sources.
             </p>
           )}
         </div>

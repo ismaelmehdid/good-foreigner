@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { extractPlainText, fetchInbox, GmailAuthError } from "./fetchInbox";
+import { extractPlainText, fetchInbox, fetchMessages, GmailAuthError } from "./fetchInbox";
 
 function b64url(s: string): string {
   return Buffer.from(s, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -182,5 +182,46 @@ describe("fetchInbox", () => {
       expect((await fetchInbox("tok", 15, new Set())).map((i) => i.id)).toEqual(["a", "b"]);
       expect((await fetchInbox("tok")).map((i) => i.id)).toEqual(["a", "b"]);
     });
+  });
+});
+
+describe("fetchMessages", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const msg = (id: string, subject: string) =>
+    new Response(
+      JSON.stringify({
+        id,
+        snippet: "snip",
+        payload: {
+          mimeType: "text/plain",
+          headers: [{ name: "Subject", value: subject }],
+          body: { data: b64url(`body of ${id}`) },
+        },
+      }),
+      { status: 200 },
+    );
+
+  it("fetches the given ids in order and skips messages that 404", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("/messages/gone")) return new Response("{}", { status: 404 });
+      const id = url.match(/messages\/([^?]+)/)![1];
+      return msg(id, `S-${id}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const items = await fetchMessages("tok", ["m1", "gone", "m2"]);
+    expect(items.map((i) => [i.id, i.subject, i.body])).toEqual([
+      ["m1", "S-m1", "body of m1"],
+      ["m2", "S-m2", "body of m2"],
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("format=full");
+  });
+
+  it("throws GmailAuthError on 401", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 401 })));
+    await expect(fetchMessages("tok", ["m1"])).rejects.toBeInstanceOf(GmailAuthError);
   });
 });

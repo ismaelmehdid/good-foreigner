@@ -5,8 +5,10 @@ export default function Disclaimer() {
         Informational only — not legal advice. Confirm with an immigration attorney.
       </p>
       <p className="mt-2">
-        This app stores nothing. Your profile stays in this browser, and the emails or text you
-        check are sent to Google&apos;s Gemini API for analysis.
+        Your profile stays in this browser, and the emails or text you check are sent to
+        Google&apos;s Gemini API for analysis. Email contents are never stored. Real-time alerts,
+        if you turn them on, keep encrypted read-only Gmail access on our server until you turn
+        them off.
       </p>
     </footer>
   );

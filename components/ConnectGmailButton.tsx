@@ -52,7 +52,7 @@ export default function ConnectGmailButton({
           {error}
         </p>
       )}
-      <p className="text-xs leading-relaxed text-stone-500 dark:text-stone-400">Read-only. Recent inbox emails are sent to Google&apos;s Gemini API for analysis. This app stores nothing.</p>
+      <p className="text-xs leading-relaxed text-stone-500 dark:text-stone-400">Read-only. Recent inbox emails are sent to Google&apos;s Gemini API for analysis. Email contents are never stored.</p>
     </div>
   );
 }
