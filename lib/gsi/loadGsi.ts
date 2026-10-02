@@ -1,5 +1,6 @@
 // Loads Google Identity Services (https://accounts.google.com/gsi/client) once per page.
-// Shared by Sign in with Google (accounts.id) and the Gmail token client (accounts.oauth2).
+// Shared by Sign in with Google (accounts.id), the Gmail token client and the real-time
+// alerts code client (accounts.oauth2).
 
 const GSI_SRC = "https://accounts.google.com/gsi/client";
 const GSI_SCRIPT_ID = "google-gsi-client";
@@ -14,6 +15,19 @@ export interface GsiTokenResponse {
 
 export interface GsiTokenClient {
   requestAccessToken: (overrides?: { prompt?: string; login_hint?: string }) => void;
+}
+
+export interface GsiCodeResponse {
+  code?: string;
+  scope?: string;
+  state?: string;
+  error?: string;
+  error_description?: string;
+  error_uri?: string;
+}
+
+export interface GsiCodeClient {
+  requestCode: () => void;
 }
 
 export interface GsiCredentialResponse {
@@ -32,6 +46,19 @@ export interface GoogleGsi {
         login_hint?: string;
         prompt?: string;
       }) => GsiTokenClient;
+      // Code model. GIS itself sends access_type=offline and prompt=consent for this flow,
+      // so the server's code exchange (redirect_uri "postmessage") returns a refresh token.
+      initCodeClient: (config: {
+        client_id: string;
+        scope: string;
+        ux_mode?: "popup" | "redirect";
+        login_hint?: string;
+        select_account?: boolean;
+        include_granted_scopes?: boolean;
+        state?: string;
+        callback: (response: GsiCodeResponse) => void;
+        error_callback?: (error: { type?: string; message?: string }) => void;
+      }) => GsiCodeClient;
     };
     id: {
       initialize: (config: {

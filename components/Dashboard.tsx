@@ -17,6 +17,7 @@ import Welcome from "@/components/Welcome";
 import Onboarding, { type StepId } from "@/components/Onboarding";
 import StayCard from "@/components/StayCard";
 import ScanPanel, { type ScanMode } from "@/components/ScanPanel";
+import RealtimeAlertsCard from "@/components/RealtimeAlertsCard";
 import ActionChecker from "@/components/ActionChecker";
 import Disclaimer from "@/components/Disclaimer";
 import Logo from "@/components/Logo";
@@ -216,7 +217,17 @@ function AccountMenu({
   );
 }
 
-export default function Dashboard({ googleClientId }: { googleClientId: string | null }) {
+export default function Dashboard({
+  googleClientId,
+  vapidPublicKey = null,
+  realtimeEnabled = false,
+}: {
+  googleClientId: string | null;
+  /** Web Push public key; null hides real-time alerts. */
+  vapidPublicKey?: string | null;
+  /** Server flag (REALTIME_ENABLED) for Gmail push → phone notifications. */
+  realtimeEnabled?: boolean;
+}) {
   const hydrated = useHydrated();
   const rawUser = useSyncExternalStore(subscribeUser, getUserSnapshot, () => null);
   const user = useMemo(() => (rawUser ? loadUser() : null), [rawUser]);
@@ -422,6 +433,15 @@ export default function Dashboard({ googleClientId }: { googleClientId: string |
             watchEnabled={watchEnabled}
             onToast={showToast}
           />
+          {!isDemo && (
+            <RealtimeAlertsCard
+              clientId={googleClientId}
+              vapidPublicKey={vapidPublicKey}
+              enabledFlag={realtimeEnabled}
+              loginHint={user?.email}
+              profile={profile}
+            />
+          )}
           <ActionChecker profile={profile} today={today} />
         </main>
       </div>
