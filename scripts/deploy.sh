@@ -8,7 +8,7 @@ REGION="${1:-us-central1}"
 SERVICE="good-foreigner"
 KEYS="GEMINI_API_KEY GEMINI_MODEL GEMMA_MODEL GEMINI_FALLBACK_MODELS GOOGLE_CLIENT_ID"
 
-ENV_FILE="$(mktemp -t gf-env).yaml"
+ENV_FILE="$(mktemp "${TMPDIR:-/tmp}/gf-env.XXXXXX")"
 trap 'rm -f "$ENV_FILE"' EXIT
 
 for key in $KEYS; do
@@ -25,6 +25,7 @@ gcloud run deploy "$SERVICE" \
   --region "$REGION" \
   --allow-unauthenticated \
   --env-vars-file "$ENV_FILE" \
+  --timeout 300 \
   --quiet
 
 gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)'

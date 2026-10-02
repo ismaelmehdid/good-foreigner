@@ -67,10 +67,12 @@ Artifact Registry.
 ## Privacy and responsible AI
 
 - **Read-only Gmail scope.** The access token stays in browser memory and is never stored.
-- **Nothing is persisted on the server.** Email bodies are never stored; the profile lives only in
-  your browser.
-- **Data minimization.** Gemma 4 screens every item first; only immigration-relevant items are sent
-  to Gemini. Because Gemma is open-weight, this step could later run fully on-device.
+- **Nothing is persisted by this app.** Email bodies are never stored; the profile lives only in
+  your browser. Recent inbox emails are sent to Google's Gemini API for analysis. Use a
+  billing-enabled (paid tier) API key so that content is not used to improve Google's products.
+- **Data minimization.** Gemma 4 screens every item first; only immigration-relevant items go on to
+  the larger Gemini model. Because Gemma is open-weight, this screening step could later run fully
+  on-device, so irrelevant emails would never leave the phone.
 - **Grounded answers.** The model may only cite rule ids from the curated rules file, and every alert
   links to the official source.
 - **Honest uncertainty.** Gray areas (remote work for a foreign employer, contest prizes, job
