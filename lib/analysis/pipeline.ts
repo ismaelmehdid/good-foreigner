@@ -78,6 +78,24 @@ export function sortAlerts(alerts: Alert[]): Alert[] {
     .map(({ a }) => a);
 }
 
+/**
+ * Deterministic sourcing check. Evidence must point at a known official rule (rulesById);
+ * ruleIds = known model ruleIds ∪ evidence ruleIds. A risky verdict (not "none") with no
+ * valid ruleIds or no valid evidence is `unsourced`, and its risk is raised to at least
+ * "medium" (never lowered: high/critical stay as they are).
+ */
+export function enforceSourcing(v: Verdict): { verdict: Verdict; unsourced: boolean } {
+  const evidenceIn = v.evidence ?? [];
+  const known = new Set(rulesById([...v.ruleIds, ...evidenceIn.map((e) => e.ruleId)]).map((r) => r.id));
+  const evidence = evidenceIn.filter((e) => known.has(e.ruleId) && e.claim.trim() !== "");
+  const ruleIds = [...new Set([...v.ruleIds, ...evidence.map((e) => e.ruleId)])].filter((id) => known.has(id));
+  const verdict: Verdict = { ...v, ruleIds, evidence };
+  if (v.risk === "none") return { verdict, unsourced: false };
+  const unsourced = ruleIds.length === 0 || evidence.length === 0;
+  if (unsourced && v.risk === "low") verdict.risk = "medium";
+  return { verdict, unsourced };
+}
+
 function citationsFor(verdict: Verdict): Citation[] {
   return rulesById(verdict.ruleIds).map((r) => ({
     ruleId: r.id,
@@ -173,9 +191,12 @@ export async function runPipeline(items: InboxItem[], profile: Profile, opts: Pi
   const alerts: Alert[] = trimmed.map((item, i) => {
     const t = triaged[i];
     if (!needsAnalysis(i)) return { item, triage: t, verdict: null, risk: "none", citations: [] };
-    const verdict = verdicts.get(item.id);
-    if (!verdict) return { item, triage: t, verdict: null, risk: "unknown", citations: [], error: ANALYZE_ERROR };
-    return { item, triage: t, verdict, risk: verdict.risk, citations: citationsFor(verdict) };
+    const raw = verdicts.get(item.id);
+    if (!raw) return { item, triage: t, verdict: null, risk: "unknown", citations: [], error: ANALYZE_ERROR };
+    const { verdict, unsourced } = enforceSourcing(raw);
+    const alert: Alert = { item, triage: t, verdict, risk: verdict.risk, citations: citationsFor(verdict) };
+    if (unsourced) alert.unsourced = true;
+    return alert;
   });
 
   return sortAlerts(alerts);

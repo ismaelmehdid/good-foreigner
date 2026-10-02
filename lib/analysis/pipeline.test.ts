@@ -19,18 +19,29 @@ vi.mock("@/lib/rules/visitorRules", () => ({
       })),
 }));
 
-import { runPipeline, mapLimit, parseProfile, parseToday, MAX_BODY_CHARS, FALLBACK_CONCURRENCY } from "./pipeline";
+import {
+  runPipeline,
+  mapLimit,
+  parseProfile,
+  parseToday,
+  enforceSourcing,
+  MAX_BODY_CHARS,
+  FALLBACK_CONCURRENCY,
+} from "./pipeline";
 import { triage } from "./triage";
 import { analyze, analyzeBatch } from "./analyze";
 
 const profile: Profile = { visaType: "VWP", entryDate: "2026-08-01" };
 const item = (id: string, body = id, source: InboxItem["source"] = "email"): InboxItem => ({ id, source, body });
-const verdict = (risk: Verdict["risk"], ruleIds: string[] = []): Verdict => ({
+const GIG = "no-paid-gigs-from-us-sources"; // the only id the mocked rulesById knows
+/** A sourced verdict by default: every ruleId has one evidence entry. */
+const verdict = (risk: Verdict["risk"], ruleIds: string[] = [GIG]): Verdict => ({
   risk,
   title: risk,
   explanation: "e",
   ruleIds,
   whatToDoInstead: "w",
+  evidence: ruleIds.map((ruleId) => ({ claim: `claim for ${ruleId}`, ruleId })),
 });
 const relevantUnless = (...irrelevant: string[]) =>
   vi.mocked(triage).mockImplementation(async (it) => ({
@@ -184,6 +195,56 @@ describe("runPipeline", () => {
     expect(analyze).not.toHaveBeenCalled();
     expect(analyzeBatch).not.toHaveBeenCalled();
     expect(alerts.every((a) => a.risk === "none")).toBe(true);
+  });
+});
+
+describe("enforceSourcing", () => {
+  it("drops evidence with unknown rule ids and unions ruleIds with evidence ids", () => {
+    const { verdict: v, unsourced } = enforceSourcing({
+      ...verdict("high", []),
+      ruleIds: ["made-up"],
+      evidence: [
+        { claim: "paid gigs are work", ruleId: GIG },
+        { claim: "invented", ruleId: "not-a-rule" },
+      ],
+    });
+    expect(v.evidence).toEqual([{ claim: "paid gigs are work", ruleId: GIG }]);
+    expect(v.ruleIds).toEqual([GIG]);
+    expect(unsourced).toBe(false);
+  });
+
+  it("raises an unsourced low verdict to medium and flags it", async () => {
+    relevantUnless();
+    vi.mocked(analyze).mockResolvedValue({ ...verdict("low", []), evidence: [{ claim: "x", ruleId: "not-a-rule" }] });
+    const [alert] = await runPipeline([item("a")], profile);
+    expect(alert.risk).toBe("medium");
+    expect(alert.verdict!.risk).toBe("medium");
+    expect(alert.unsourced).toBe(true);
+    expect(alert.citations).toEqual([]);
+  });
+
+  it("leaves a high verdict with valid evidence untouched", async () => {
+    relevantUnless();
+    vi.mocked(analyze).mockResolvedValue(verdict("high"));
+    const [alert] = await runPipeline([item("a")], profile);
+    expect(alert.risk).toBe("high");
+    expect(alert.unsourced).toBeUndefined();
+    expect(alert.citations.map((c) => c.ruleId)).toEqual([GIG]);
+    expect(alert.verdict!.evidence).toEqual([{ claim: `claim for ${GIG}`, ruleId: GIG }]);
+  });
+
+  it("never lowers critical/high even when unsourced", () => {
+    const { verdict: v, unsourced } = enforceSourcing(verdict("critical", []));
+    expect(v.risk).toBe("critical");
+    expect(unsourced).toBe(true);
+  });
+
+  it("keeps a none verdict with no evidence as none, not unsourced", async () => {
+    relevantUnless();
+    vi.mocked(analyze).mockResolvedValue(verdict("none", []));
+    const [alert] = await runPipeline([item("a")], profile);
+    expect(alert.risk).toBe("none");
+    expect(alert.unsourced).toBeUndefined();
   });
 });
 

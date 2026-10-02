@@ -1,11 +1,14 @@
 import { ThinkingLevel, Type, type Schema, type ThinkingConfig } from "@google/genai";
-import type { InboxItem, Profile, RuleScope, Verdict, VisaType } from "@/lib/types";
+import type { Evidence, InboxItem, Profile, RuleScope, Verdict, VisaType } from "@/lib/types";
 import { ANALYZE_BATCH_TIMEOUT_MS, ANALYZE_TIMEOUT_MS, generateWithFallback, geminiModels } from "@/lib/ai/client";
 import { parseModelJson } from "@/lib/ai/json";
 import { VISITOR_RULES, rulesForPrompt } from "@/lib/rules/visitorRules";
 import { computeStay } from "@/lib/stay/stayCalculator";
 
 const RISKS: Verdict["risk"][] = ["none", "low", "medium", "high", "critical"];
+
+const RULE_IDS = VISITOR_RULES.map((r) => r.id);
+const KNOWN_RULE_IDS = new Set(RULE_IDS);
 
 const VERDICT_SCHEMA: Schema = {
   type: Type.OBJECT,
@@ -18,17 +21,31 @@ const VERDICT_SCHEMA: Schema = {
     },
     ruleIds: {
       type: Type.ARRAY,
-      items: { type: Type.STRING },
-      description: "Ids of the rules that apply, taken ONLY from the provided rules list.",
+      items: { type: Type.STRING, enum: RULE_IDS },
+      description: "Ids of every rule relied on (must include every evidence ruleId), ONLY from the provided rules list.",
     },
     whatToDoInstead: { type: Type.STRING, description: "One concrete safe action the user can take." },
+    evidence: {
+      type: Type.ARRAY,
+      description:
+        "One entry per factual or legal statement made in explanation and whatToDoInstead, each tied to the listed rule that supports it. Empty only for risk none or when no listed rule covers the situation.",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          claim: { type: Type.STRING, description: "The statement, as made in the verdict (short)." },
+          ruleId: { type: Type.STRING, enum: RULE_IDS, description: "Id of the listed rule that supports it." },
+        },
+        required: ["claim", "ruleId"],
+        propertyOrdering: ["claim", "ruleId"],
+      },
+    },
     suggestedReply: {
       type: Type.STRING,
       description: "Short polite reply email. Only when the item is an email asking for something risky.",
     },
   },
-  required: ["risk", "title", "explanation", "ruleIds", "whatToDoInstead"],
-  propertyOrdering: ["risk", "title", "explanation", "ruleIds", "whatToDoInstead", "suggestedReply"],
+  required: ["risk", "title", "explanation", "ruleIds", "whatToDoInstead", "evidence"],
+  propertyOrdering: ["risk", "title", "explanation", "whatToDoInstead", "evidence", "ruleIds", "suggestedReply"],
 };
 
 const BATCH_SCHEMA: Schema = {
@@ -81,6 +98,8 @@ export function rulesTextForVisa(visa: VisaType): string {
   }
   return lines.join("\n");
 }
+
+export const NO_RULE_SENTENCE = "No official rule in our sources covers this";
 
 export interface AnalyzeOptions {
   /** User's local date, YYYY-MM-DD. Defaults to the server's UTC date. */
@@ -146,7 +165,11 @@ export function buildSystemInstruction(profile: Profile, today: string = serverT
     "- critical: clear violation with serious consequences (unauthorized employment, overstay, misrepresentation to officials).",
     "",
     "Hard requirements:",
-    "- Only cite rule ids from the list above. Never invent rule ids. Use an empty array if no rule applies.",
+    "- SOURCING (mandatory): every factual or legal statement in explanation and whatToDoInstead MUST come from a rule in the list above and MUST appear in evidence as {claim, ruleId}, where claim restates that statement and ruleId is the listed rule that supports it. Never state a legal fact from general knowledge or one that is not in the list.",
+    "- The computed last permitted day above is a fact you may state; cite the matching stay rule from the list (e.g. vwp-90-day-limit or b2-i94-admit-until) as its evidence.",
+    `- If no listed rule covers the situation, say exactly "${NO_RULE_SENTENCE}", call it a gray area, set risk to at least medium, leave evidence empty, and recommend confirming with an immigration attorney or the official agency (USCIS, CBP or the U.S. Department of State).`,
+    "- Risk none needs no evidence (evidence may be an empty array).",
+    "- Only cite rule ids from the list above. Never invent rule ids. ruleIds must include every evidence ruleId.",
     "- If you are uncertain, say it is a gray area and recommend confirming with an immigration attorney. Over-warning is better than missing a real risk.",
     "- This is informational, not legal advice. Do not claim certainty you do not have.",
     "- whatToDoInstead must be a concrete safe action, e.g. \"Reply that you can attend unpaid, or accept only after you leave the U.S. and do the work from outside the U.S.\". For risk none, say no action is needed.",
@@ -172,7 +195,25 @@ function buildUserContent(item: InboxItem): string {
     .join("\n");
 }
 
-function validateVerdict(raw: unknown): Verdict {
+/** Keep only evidence with a non-empty claim and a ruleId that exists in VISITOR_RULES. */
+function validEvidence(raw: unknown): Evidence[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Evidence[] = [];
+  for (const e of raw) {
+    const claim = (e as Evidence)?.claim;
+    const ruleId = (e as Evidence)?.ruleId;
+    if (typeof claim === "string" && claim.trim() && typeof ruleId === "string" && KNOWN_RULE_IDS.has(ruleId)) {
+      out.push({ claim: claim.trim(), ruleId });
+    }
+  }
+  return out;
+}
+
+/**
+ * Validate one model verdict. Unknown rule ids are dropped from ruleIds and evidence;
+ * ruleIds becomes the union of the model's ruleIds and the evidence ruleIds.
+ */
+export function validateVerdict(raw: unknown): Verdict {
   if (!raw || typeof raw !== "object") throw new Error("verdict is not an object");
   const v = raw as Record<string, unknown>;
   const risk = typeof v.risk === "string" ? (v.risk.toLowerCase() as Verdict["risk"]) : undefined;
@@ -180,16 +221,22 @@ function validateVerdict(raw: unknown): Verdict {
   if (typeof v.title !== "string" || typeof v.explanation !== "string") {
     throw new Error("verdict missing title/explanation");
   }
-  const known = new Set(VISITOR_RULES.map((r) => r.id));
-  const ruleIds = Array.isArray(v.ruleIds)
-    ? [...new Set(v.ruleIds.filter((id): id is string => typeof id === "string" && known.has(id)))]
-    : [];
+  const evidence = validEvidence(v.evidence);
+  const modelIds = Array.isArray(v.ruleIds) ? v.ruleIds : [];
+  const ruleIds = [
+    ...new Set(
+      [...modelIds, ...evidence.map((e) => e.ruleId)].filter(
+        (id): id is string => typeof id === "string" && KNOWN_RULE_IDS.has(id),
+      ),
+    ),
+  ];
   const verdict: Verdict = {
     risk,
     title: v.title,
     explanation: v.explanation,
     ruleIds,
     whatToDoInstead: typeof v.whatToDoInstead === "string" ? v.whatToDoInstead : "",
+    evidence,
   };
   if (typeof v.suggestedReply === "string" && v.suggestedReply.trim()) {
     verdict.suggestedReply = v.suggestedReply.trim();
@@ -219,6 +266,7 @@ export async function analyze(item: InboxItem, profile: Profile, opts: AnalyzeOp
 function buildBatchContent(items: InboxItem[]): string {
   return [
     `There are ${items.length} items below. Judge EACH item independently and return one verdict per item in "verdicts", copying its id exactly.`,
+    `Every verdict must follow the SOURCING rules: each factual or legal statement appears in that verdict's evidence as {claim, ruleId} from the rules list; if no listed rule covers an item, say "${NO_RULE_SENTENCE}", call it a gray area and set risk to at least medium.`,
     "",
     ...items.map((item) => `### ITEM id=${item.id}\n${buildUserContent(item)}\n`),
   ].join("\n");
