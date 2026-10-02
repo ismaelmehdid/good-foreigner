@@ -98,12 +98,14 @@ your Google account as a test user.
 ## Deploy to Cloud Run
 
 ```bash
-gcloud run deploy good-foreigner --source . --region us-central1 --allow-unauthenticated \
-  --set-env-vars "^|^GEMINI_MODEL=gemini-3.8-flash|GEMMA_MODEL=gemma-4-26b-a4b-it|GEMINI_FALLBACK_MODELS=gemini-3.5-flash-lite,gemini-3.1-flash-lite|GOOGLE_CLIENT_ID=..." \
-  --update-env-vars GEMINI_API_KEY=...
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
+scripts/deploy.sh
 ```
 
-Then add the Cloud Run URL to the OAuth client's authorized JavaScript origins.
+`scripts/deploy.sh` enables Cloud Run, Cloud Build and Artifact Registry, then deploys from source
+with the values in `.env.local` passed as an env-vars file. Afterwards, add the Cloud Run URL to the
+OAuth client's authorized JavaScript origins.
 
 ## License
 
