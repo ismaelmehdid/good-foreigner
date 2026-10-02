@@ -10,7 +10,6 @@ const FAM_302_11 = "https://fam.state.gov/fam/09FAM/09FAM030211.html";
 const CFR_214_1 = "https://www.ecfr.gov/current/title-8/chapter-I/subchapter-B/part-214/section-214.1";
 const CFR_214_2 = "https://www.ecfr.gov/current/title-8/chapter-I/subchapter-B/part-214/section-214.2";
 const CFR_217_3 = "https://www.ecfr.gov/current/title-8/chapter-I/subchapter-B/part-217/section-217.3";
-const CFR_274A_1 = "https://www.ecfr.gov/current/title-8/chapter-I/subchapter-B/part-274a/section-274a.1";
 const USC_1182 = "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title8-section1182&num=0&edition=prelim";
 const USC_1184 = "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title8-section1184&num=0&edition=prelim";
 const USC_1187 = "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title8-section1187&num=0&edition=prelim";
@@ -22,6 +21,7 @@ const CBP_I94 = "https://www.cbp.gov/travel/international-visitors/i-94";
 const USCIS_EXTEND = "https://www.uscis.gov/visit-the-united-states/extend-your-stay";
 const USCIS_CHANGE = "https://www.uscis.gov/visit-the-united-states/change-my-nonimmigrant-status";
 const USCIS_UNLAWFUL = "https://www.uscis.gov/laws-and-policy/other-resources/unlawful-presence-and-inadmissibility";
+const CBP_B1_SHEET = "https://www.cbp.gov/sites/default/files/2026-02/B-1%20Permissible%20Activities_2026.pdf";
 
 const ALL: RuleScope[] = ["B1", "B2", "VWP"];
 const B_VISAS: RuleScope[] = ["B1", "B2"];
@@ -54,7 +54,7 @@ export const VISITOR_RULES: Rule[] = [
     appliesTo: ALL,
     severity: "critical",
     rule:
-      "A visitor may not receive a salary or fee from a U.S. source for services performed in the U.S. Short paid gigs count: user-research sessions, freelance contracts, consulting calls, or tasks paid by invoice, W-9, 1099, gift card, or platform payout are treated as unauthorized work. Only reimbursement of reasonable incidental expenses is allowed.",
+      "A visitor may not receive a salary or fee from a U.S. source for services performed in the U.S. Short paid gigs count: user-research sessions, freelance contracts, consulting calls, or tasks paid by invoice, W-9, 1099, or platform payout are treated as unauthorized work (gift cards or in-kind pay are likely treated the same; that is an inference, not explicit in the sources). The only U.S.-source money allowed is narrow: reimbursement of actual incidental expenses, INA 212(q) academic honoraria, prize money in certain competition cases, and an outside director's time-and-travel pay for U.S. board meetings. None of these covers a for-profit company's paid task.",
     examples: [
       "\"$150 for a 45-minute paid feedback session — send your W-9 or invoice\"",
       "Accepting an Upwork/Fiverr contract from a U.S. client while physically in the U.S.",
@@ -91,7 +91,7 @@ export const VISITOR_RULES: Rule[] = [
     appliesTo: ALL,
     severity: "medium",
     rule:
-      "A B visitor may accept an honorarium plus incidental expenses only for usual academic activities (lecturing, guest teaching, academic festivals) lasting no more than 9 days at one institution, paid by a university, affiliated nonprofit, or nonprofit/government research organization, and from no more than 5 such institutions in the past 6 months. Payments from for-profit companies do not qualify. VWP travelers are generally treated like B visitors here, but confirm with the institution.",
+      "A B visitor may accept an honorarium plus incidental expenses only for usual academic activities (lecturing, guest teaching, academic festivals) lasting no more than 9 days at one institution, paid by a university, affiliated nonprofit, or nonprofit/government research organization, and from no more than 5 such institutions in the past 6 months. Payments from for-profit companies do not qualify. Gray area: the statute covers anyone admitted as a B visitor, but the State Department describes it as a B-1 benefit, so reliance by B-2 or VWP visitors is uncertain.",
     examples: [
       "A university paying you $500 to give a 1-day guest lecture (likely OK)",
       "A for-profit startup paying you a \"speaker honorarium\" for a meetup talk (not covered)",
@@ -127,7 +127,7 @@ export const VISITOR_RULES: Rule[] = [
     appliesTo: ALL,
     severity: "medium",
     rule:
-      "Gray area: no statute or regulation expressly permits or forbids a visitor from doing remote work for a foreign employer, paid abroad, while in the U.S. The regulatory definition of employment covers service or labor performed within the United States, so sustained or full-time remote work is risky; brief, incidental work (answering emails, a few calls) during a trip whose main purpose is tourism or business meetings is lower risk.",
+      "Gray area: no statute, regulation, or State Department/CBP guidance expressly permits or forbids a visitor from doing remote work for a foreign employer, paid abroad, while in the U.S. Brief tasks incidental to a job based abroad (answering urgent emails, a few calls) are lower risk; sustained or full-time work from U.S. soil can look like labor \"within the United States\" and like living here (CBP: not permissible to \"in effect, live and work in the United States\"). Officers decide case by case; answer CBP truthfully.",
     examples: [
       "Your employer at home asks you to work remotely from the U.S. for a few days",
       "Planning a multi-week \"workation\" in the U.S. working full time for a foreign company",
@@ -138,7 +138,7 @@ export const VISITOR_RULES: Rule[] = [
       "Do substantial work blocks after you leave the U.S.",
       "If remote work is a main purpose of the trip, ask an immigration attorney before you travel",
     ],
-    citation: { name: "8 CFR 274a.1(h) — definition of employment (service or labor within the U.S.)", url: CFR_274A_1 },
+    citation: { name: "INA 101(a)(15)(B); 9 FAM 402.2-5(A) — no source directly addresses remote work", url: FAM_402_2 },
   },
   {
     id: "volunteering-limits",
@@ -146,7 +146,7 @@ export const VISITOR_RULES: Rule[] = [
     appliesTo: ALL,
     severity: "medium",
     rule:
-      "Volunteering is permitted only in narrow cases, such as an organized voluntary service program of a recognized religious or nonprofit charitable organization you belong to, with no salary from a U.S. source beyond incidental expenses. \"Volunteering\" for a for-profit company, or unpaid work that would normally be a paid job, is treated as unauthorized employment.",
+      "Volunteering is permitted only in narrow cases, such as an organized voluntary service program of a recognized religious or nonprofit charitable organization you are a member of and committed to, that does not involve selling articles or soliciting donations, with no salary from a U.S. source beyond incidental expenses. \"Volunteering\" for a for-profit company, or unpaid work that would normally be a paid job, is treated as unauthorized employment.",
     examples: [
       "\"Volunteering\" at a startup in exchange for room and board",
       "Unpaid internship at a U.S. company",
@@ -164,7 +164,7 @@ export const VISITOR_RULES: Rule[] = [
     appliesTo: ALL,
     severity: "high",
     rule:
-      "A B-1/B-2 visitor violates status by enrolling in a course of study; you need F-1 or M-1 status first. A short recreational or avocational course incidental to a tourist trip (not for credit) is allowed. VWP travelers follow the same principle.",
+      "A B-1/B-2 visitor violates status by enrolling in a course of study; you need F-1 or M-1 status first. Recreational or avocational study not for credit toward a degree is allowed, whether incidental to a tourist trip or the main purpose of a B-2 visit. VWP travelers follow the same principle.",
     examples: [
       "Enrolling in a for-credit university semester or a full-time coding bootcamp",
       "Signing up for a degree program and starting classes while on ESTA",
@@ -175,7 +175,7 @@ export const VISITOR_RULES: Rule[] = [
       "B visa holders may ask USCIS for a change of status, and must not start classes until approved",
       "Choose a short recreational, non-credit course",
     ],
-    citation: { name: "8 CFR 214.2(b)(7) — enrollment in a course of study prohibited", url: CFR_214_2 },
+    citation: { name: "8 CFR 214.2(b)(7); 9 FAM 402.2-4(A)(6) — study limits", url: CFR_214_2 },
   },
   {
     id: "contests-and-prizes-gray",
@@ -183,7 +183,7 @@ export const VISITOR_RULES: Rule[] = [
     appliesTo: ALL,
     severity: "medium",
     rule:
-      "Gray area: guidance lets amateurs compete in contests (B-2) and lets some visitors receive a prize with no other remuneration (B-1), but it does not address hackathon prizes specifically. Winning a prize is lower risk than being paid for work; risk rises if the \"prize\" requires a contract, IP transfer, follow-up deliverables, or is paid like a fee for services.",
+      "Gray area: competing is generally fine (amateurs may compete on B-2 if not paid for participating). No official source addresses hackathon prizes: professional entertainers may receive a prize \"(monetary or otherwise)\" and professional athletes based abroad may receive prize money, but amateurs compete \"if not being paid.\" A one-time, merit-judged prize with no IP transfer or sponsor deliverables is lower risk; bounties, sponsor-commissioned builds, IP assignment, or follow-on paid work are higher risk. Tax: a U.S. prize is U.S.-source income (expect a W-8BEN and possible 30% withholding).",
     examples: [
       "Receiving a $5,000 hackathon prize via a W-9 or 1099 payment",
       "A prize conditioned on building a feature for the sponsor after the event",
@@ -194,7 +194,7 @@ export const VISITOR_RULES: Rule[] = [
       "Decline follow-up paid work or contracts tied to the prize",
       "If the amount is significant, ask an immigration attorney before accepting",
     ],
-    citation: { name: "9 FAM 402.2-4(A)(7) and 402.2-5(G)(2) — amateurs and competition prizes", url: FAM_402_2 },
+    citation: { name: "9 FAM 402.2-4(A)(7), 402.2-5(C)(4)(a), 402.2-5(G)(2) — contests and prizes", url: FAM_402_2 },
   },
   {
     id: "job-interviews-networking",
@@ -202,7 +202,7 @@ export const VISITOR_RULES: Rule[] = [
     appliesTo: ALL,
     severity: "low",
     rule:
-      "Attending interviews, networking events, and meetings with potential employers generally falls within permitted business-visitor activity (consultations, conferences). You may not start working, do paid or unpaid trial work, or accept a role that begins before you hold work authorization. Interviewing does not change your obligation to leave on time.",
+      "No regulation or FAM section mentions job interviews specifically, but they are widely treated as permitted business-visitor activity (consultations, conferences) because no work is done. You may not start working, do paid or unpaid trial work, or accept a role that begins before you hold work authorization. Interviewing does not change your obligation to leave on time.",
     examples: [
       "Interviewing on-site with a U.S. company (generally OK)",
       "A \"take-home\" paid trial project or onboarding day while visiting (not OK)",
@@ -220,7 +220,7 @@ export const VISITOR_RULES: Rule[] = [
     appliesTo: ["B1", "VWP"],
     severity: "medium",
     rule:
-      "A founder or board member of a company may attend board meetings, pitch investors, and negotiate deals as a business visitor. Seeking investment is permitted, but visitors are barred from performing productive labor for the U.S. company, such as building the product, managing staff day to day, or taking a U.S. salary.",
+      "A founder or board member may attend board meetings, pitch investors, and negotiate deals as a business visitor; a U.S. corporation may pay an outside director for time and travel to attend board meetings. Seeking investment is permitted, but visitors are barred from performing productive labor for the U.S. company, such as building the product, managing staff day to day, or taking a U.S. salary.",
     examples: [
       "Pitching U.S. investors for your startup (OK)",
       "Running daily operations of your U.S. Delaware C-corp from San Francisco (not OK)",
@@ -229,7 +229,7 @@ export const VISITOR_RULES: Rule[] = [
       "Keep U.S. trips to meetings, fundraising, and negotiations",
       "Explore E-2, L-1, or O-1 status for operating the company in the U.S.",
     ],
-    citation: { name: "9 FAM 402.2-5(C)(3) and (C)(7) — board members and investors", url: FAM_402_2 },
+    citation: { name: "9 FAM 402.2-5(C)(3), (C)(7); CBP B-1 Permissible Activities Q20", url: CBP_B1_SHEET },
   },
   {
     id: "ssn-and-tax-forms",
@@ -237,7 +237,7 @@ export const VISITOR_RULES: Rule[] = [
     appliesTo: ALL,
     severity: "high",
     rule:
-      "Being asked for a W-9, to invoice a U.S. company for services, to join U.S. payroll, or to obtain a Social Security number for pay is a strong signal the payment is compensation for services. Visitors are generally not eligible for an SSN for work purposes, and a W-9 is a U.S.-person tax form.",
+      "Being asked for a W-9, to invoice a U.S. company for services, to join U.S. payroll, or to obtain a Social Security number for pay is a strong signal the payment is compensation for services. Visitors are generally not eligible for an SSN for work purposes, and a W-9 is a U.S.-person tax form. A W-8BEN request alone (for example for a prize) is a tax step, not proof of work, but pay for services is still barred.",
     examples: [
       "\"Please send your W-9 so we can pay you\"",
       "Being onboarded to a U.S. payroll system during your visit",
@@ -350,7 +350,7 @@ export const VISITOR_RULES: Rule[] = [
     appliesTo: B_VISAS,
     severity: "critical",
     rule:
-      "Your permitted stay ends on the \"admit until\" date on your I-94 record, not on your visa's expiration date. A 10-year visa does not let you stay 10 years; B visitors are typically admitted for up to 6 months. Check your I-94 online after each entry.",
+      "Your permitted stay ends on the \"admit until\" date on your I-94 record, not on your visa's expiration date. A 10-year visa does not let you stay 10 years. B visitors are commonly admitted for 6 months or less; the regulation allows up to 1 year (8 CFR 214.2(b)(1)). Check your I-94 online after each entry.",
     examples: [
       "Assuming you can stay until the visa expires in 2034",
       "Not checking the I-94 and missing an admit-until date shorter than expected",
@@ -402,7 +402,7 @@ export const VISITOR_RULES: Rule[] = [
     appliesTo: ALL,
     severity: "critical",
     rule:
-      "Time in the U.S. after your authorized stay ends counts as unlawful presence. More than 180 days but less than one year, followed by departure, triggers a 3-year bar on returning; one year or more triggers a 10-year bar.",
+      "Time in the U.S. after your authorized stay ends counts as unlawful presence. More than 180 days but less than one year, followed by voluntary departure before removal proceedings begin, triggers a 3-year bar on returning; one year or more (then departing or being removed) triggers a 10-year bar.",
     examples: ["Staying 7 months past your I-94 date, then leaving", "Overstaying a 90-day VWP admission by months"],
     alternatives: ["Track your last allowed day and depart before it", "Speak to an immigration attorney immediately if you have already overstayed"],
     citation: { name: "INA 212(a)(9)(B) (8 U.S.C. 1182(a)(9)(B)); USCIS unlawful presence", url: USCIS_UNLAWFUL },
@@ -433,7 +433,7 @@ export const VISITOR_RULES: Rule[] = [
       "Enrolling in a full-time program a month after arriving on ESTA",
     ],
     alternatives: ["Only do what you declared at entry", "Consult an immigration attorney before any change of plans"],
-    citation: { name: "9 FAM 302.9-4 — 90-day rule (inconsistent conduct)", url: FAM_302_9 },
+    citation: { name: "9 FAM 302.9-4(B)(3)(g) — 90-day rule (inconsistent conduct)", url: FAM_302_9 },
   },
   {
     id: "immigrant-intent",
@@ -470,10 +470,10 @@ export const VISITOR_RULES: Rule[] = [
     appliesTo: ALL,
     severity: "medium",
     rule:
-      "Unlawful presence generally begins the day after your authorized stay ends (your I-94 admit-until date, or day 90 for VWP). For B visitors, a timely, non-frivolous extension or change of status request can pause the count while it is pending (VWP travelers cannot file one); see State Department guidance for edge cases.",
+      "Unlawful presence generally begins the day after your authorized stay ends (your I-94 admit-until date, or day 90 for VWP). For B visitors, time while a timely, non-frivolous extension or change of status request is pending counts as a period of authorized stay for both the 3- and 10-year bars, provided you have not worked without authorization (VWP travelers cannot file one).",
     examples: ["Assuming a late extension request stops the clock", "Not knowing your last authorized day"],
     alternatives: ["Know your exact last day", "File any extension request before that day"],
-    citation: { name: "9 FAM 302.11 — unlawful presence ineligibility", url: FAM_302_11 },
+    citation: { name: "9 FAM 302.11-3(B)(5) — unlawful presence; pending extension/change of status", url: FAM_302_11 },
   },
 ];
 
