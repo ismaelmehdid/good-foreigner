@@ -14,6 +14,8 @@ export interface StayInfo {
   daysLeft: number | null;
   status: StayStatus;
   notes: string[];
+  /** Set when the entered dates do not fit the visa's limits; the UI shows it prominently. */
+  warning: string | null;
 }
 
 export type ItemSource = "email" | "action";

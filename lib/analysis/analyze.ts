@@ -129,6 +129,7 @@ export function stayLines(profile: Profile, today: string): string[] {
       "Last permitted day in the U.S.: unknown (no I-94 admit-until date provided). Do not calculate it yourself; tell the user to check their I-94 admit-until date at https://i94.cbp.dhs.gov.",
     );
   }
+  if (stay.warning) lines.push(`- Date check: ${stay.warning}`);
   for (const note of stay.notes) lines.push(`- ${note}`);
   return lines;
 }

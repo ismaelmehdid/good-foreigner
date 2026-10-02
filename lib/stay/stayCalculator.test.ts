@@ -29,4 +29,47 @@ describe("computeStay", () => {
     expect(s.notes.join(" ")).toMatch(/cannot be extended/);
     expect(s.notes.join(" ")).toMatch(/Canada/);
   });
+
+  it("VWP I-94 date beyond day 90 is capped at day 90 with a warning, not rejected", () => {
+    const s = computeStay(
+      { visaType: "VWP", entryDate: "2026-08-01", admitUntil: "2026-11-15" },
+      "2026-10-02",
+    );
+    expect(s.lastDay).toBe("2026-10-29");
+    expect(s.daysLeft).toBe(27);
+    expect(s.warning).toMatch(/90 days/);
+    expect(s.warning).toMatch(/2026-10-29/);
+  });
+  it("VWP I-94 date within 90 days has no warning", () => {
+    const s = computeStay(
+      { visaType: "VWP", entryDate: "2026-08-01", admitUntil: "2026-10-27" },
+      "2026-10-02",
+    );
+    expect(s.lastDay).toBe("2026-10-27");
+    expect(s.warning).toBeNull();
+  });
+  it("B visa I-94 date beyond one year is kept (extensions exist) but flagged", () => {
+    const s = computeStay(
+      { visaType: "B2", entryDate: "2026-01-10", admitUntil: "2027-03-01" },
+      "2026-10-02",
+    );
+    expect(s.lastDay).toBe("2027-03-01");
+    expect(s.warning).toMatch(/I-539/);
+  });
+  it("B visa six-month admission has no warning", () => {
+    const s = computeStay(
+      { visaType: "B2", entryDate: "2026-08-01", admitUntil: "2027-01-31" },
+      "2026-10-02",
+    );
+    expect(s.warning).toBeNull();
+  });
+  it("I-94 date before arrival is unknown with a warning", () => {
+    const s = computeStay(
+      { visaType: "B2", entryDate: "2026-08-01", admitUntil: "2026-07-01" },
+      "2026-10-02",
+    );
+    expect(s.status).toBe("unknown");
+    expect(s.lastDay).toBeNull();
+    expect(s.warning).toMatch(/before your arrival/);
+  });
 });
