@@ -1,67 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getGoogle, loadGsi, type GsiTokenClient } from "@/lib/gsi/loadGsi";
 
-const GSI_SRC = "https://accounts.google.com/gsi/client";
-const GSI_SCRIPT_ID = "google-gsi-client";
 const GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 
-// Minimal Google Identity Services types (no @types package needed).
-interface TokenResponse {
-  access_token?: string;
-  expires_in?: number;
-  error?: string;
-  error_description?: string;
-}
-
-interface TokenClient {
-  requestAccessToken: (overrides?: { prompt?: string }) => void;
-}
-
-interface GoogleGsi {
-  accounts: {
-    oauth2: {
-      initTokenClient: (config: {
-        client_id: string;
-        scope: string;
-        callback: (response: TokenResponse) => void;
-        error_callback?: (error: { type?: string; message?: string }) => void;
-      }) => TokenClient;
-    };
-  };
-}
-
-function getGoogle(): GoogleGsi | undefined {
-  return (window as unknown as { google?: GoogleGsi }).google;
-}
-
-/** Inject the GSI script once (deduped by element id) and resolve when it is usable. */
-function loadGsi(): Promise<GoogleGsi> {
-  return new Promise((resolve, reject) => {
-    const ready = getGoogle();
-    if (ready?.accounts?.oauth2) {
-      resolve(ready);
-      return;
-    }
-    let script = document.getElementById(GSI_SCRIPT_ID) as HTMLScriptElement | null;
-    if (!script) {
-      script = document.createElement("script");
-      script.id = GSI_SCRIPT_ID;
-      script.src = GSI_SRC;
-      script.async = true;
-      script.defer = true;
-      document.head.appendChild(script);
-    }
-    script.addEventListener("load", () => {
-      const g = getGoogle();
-      if (g?.accounts?.oauth2) resolve(g);
-      else reject(new Error("Google sign-in loaded but is unavailable"));
-    });
-    script.addEventListener("error", () => reject(new Error("Could not load Google sign-in")));
-  });
-}
-
-export function useGmailToken(clientId: string | null): {
+/**
+ * Short-lived Gmail read-only access token via the GIS token client.
+ * The token lives only in React state (never stored). `loginHint` (the signed-in
+ * user's email) makes Google preselect that account in the consent popup.
+ */
+export function useGmailToken(
+  clientId: string | null,
+  loginHint?: string,
+): {
   token: string | null;
   request: () => void;
   ready: boolean;
@@ -70,18 +22,20 @@ export function useGmailToken(clientId: string | null): {
   const [token, setToken] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const clientRef = useRef<TokenClient | null>(null);
+  const clientRef = useRef<GsiTokenClient | null>(null);
 
   useEffect(() => {
     if (!clientId) return;
     let cancelled = false;
 
     loadGsi()
-      .then((google) => {
-        if (cancelled) return;
+      .then(() => {
+        const google = getGoogle();
+        if (cancelled || !google) return;
         clientRef.current = google.accounts.oauth2.initTokenClient({
           client_id: clientId,
           scope: GMAIL_READONLY_SCOPE,
+          ...(loginHint ? { login_hint: loginHint } : {}),
           callback: (response) => {
             if (cancelled) return;
             if (response.error || !response.access_token) {
@@ -93,7 +47,9 @@ export function useGmailToken(clientId: string | null): {
           },
           error_callback: (err) => {
             if (cancelled) return;
-            setError(err.type === "popup_closed" ? "Sign-in window was closed" : err.message || "Gmail authorization failed");
+            setError(
+              err.type === "popup_closed" ? "Sign-in window was closed" : err.message || "Gmail authorization failed",
+            );
           },
         });
         setReady(true);
@@ -106,8 +62,10 @@ export function useGmailToken(clientId: string | null): {
       cancelled = true;
       clientRef.current = null;
       setReady(false);
+      // A different client or account invalidates the previous token.
+      setToken(null);
     };
-  }, [clientId]);
+  }, [clientId, loginHint]);
 
   const request = useCallback(() => {
     setError(null);

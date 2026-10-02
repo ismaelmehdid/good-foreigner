@@ -6,11 +6,13 @@ import { useGmailToken } from "@/lib/gmail/useGmailToken";
 export default function ConnectGmailButton({
   clientId,
   onToken,
+  loginHint,
 }: {
   clientId: string | null;
   onToken: (token: string) => void;
+  loginHint?: string;
 }) {
-  const { token, request, ready, error } = useGmailToken(clientId);
+  const { token, request, ready, error } = useGmailToken(clientId, loginHint);
 
   const emitToken = useEffectEvent((t: string) => onToken(t));
   useEffect(() => {
@@ -39,7 +41,7 @@ export default function ConnectGmailButton({
           disabled={!ready}
           className="w-fit rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
         >
-          Connect Gmail (read-only)
+          Connect Gmail
         </button>
       )}
       {error && (
