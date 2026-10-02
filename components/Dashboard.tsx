@@ -1,14 +1,27 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { Profile } from "@/lib/types";
-import { clearProfile, loadProfile, saveProfile } from "@/lib/profileStore";
-import ProfileForm from "@/components/ProfileForm";
+import type { GoogleUser } from "@/lib/auth/decodeIdToken";
+import { getUserSnapshot, loadUser, saveUser, subscribeUser } from "@/lib/auth/userStore";
+import { loadProfile, saveProfile } from "@/lib/profileStore";
+import { signOut } from "@/components/GoogleSignInButton";
+import {
+  needsHomeScreenInstall,
+  notificationPermission,
+  requestNotifications,
+  sendTestNotification,
+} from "@/lib/notify/notify";
+import Toast from "@/components/Toast";
+import Welcome from "@/components/Welcome";
+import Onboarding, { type StepId } from "@/components/Onboarding";
 import StayCard from "@/components/StayCard";
-import ScanPanel from "@/components/ScanPanel";
+import ScanPanel, { type ScanMode } from "@/components/ScanPanel";
 import ActionChecker from "@/components/ActionChecker";
 import Disclaimer from "@/components/Disclaimer";
+import Logo from "@/components/Logo";
 
+const DEMO_ACCOUNT = "demo";
 const noopSubscribe = () => () => {};
 
 /** False during SSR and hydration, true afterwards — lets us read localStorage without a hydration mismatch. */
@@ -20,146 +33,386 @@ function useHydrated(): boolean {
   );
 }
 
-function todayLocalISO(): string {
-  const d = new Date();
+function localISO(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-function Logo() {
+function todayLocalISO(): string {
+  return localISO(new Date());
+}
+
+/** Demo visitor: on ESTA, arrived 62 days ago (27 days left). */
+function demoProfile(): Profile {
+  const d = new Date();
+  d.setDate(d.getDate() - 62);
+  return { visaType: "VWP", entryDate: localISO(d), homeCountry: "France" };
+}
+
+function MenuLabel({ label, value, on }: { label: string; value: string; on: boolean }) {
   return (
-    <svg aria-hidden viewBox="0 0 24 24" className="h-7 w-7 text-teal-700 dark:text-teal-400">
-      <path
-        fill="currentColor"
-        d="M12 2 4 5v6.1c0 5 3.4 9.7 8 10.9 4.6-1.2 8-5.9 8-10.9V5l-8-3Z"
-        opacity=".15"
-      />
-      <path
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-        d="M12 2 4 5v6.1c0 5 3.4 9.7 8 10.9 4.6-1.2 8-5.9 8-10.9V5l-8-3Z"
-      />
-      <path
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="m8.5 12 2.5 2.5 4.5-5"
-      />
-    </svg>
+    <span className="flex w-full items-center justify-between gap-3">
+      {label}
+      <span
+        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+          on
+            ? "bg-green-100 text-green-800 dark:bg-green-900/60 dark:text-green-200"
+            : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+        }`}
+      >
+        {value}
+      </span>
+    </span>
+  );
+}
+
+function AccountMenu({
+  user,
+  demo,
+  watchAvailable,
+  watchEnabled,
+  onToggleWatch,
+  onTestNotification,
+  onToggleNotifications,
+  onEditProfile,
+  onSignOut,
+}: {
+  user: GoogleUser | null;
+  demo: boolean;
+  watchAvailable: boolean;
+  watchEnabled: boolean;
+  onToggleWatch: () => void;
+  onTestNotification: () => void;
+  onToggleNotifications: () => void;
+  onEditProfile: () => void;
+  onSignOut: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const notificationsOn = open && notificationPermission() === "granted";
+  const firstName = user ? user.name.split(/\s+/)[0] || user.email : "Demo";
+  const initial = (user?.name || user?.email || "D").charAt(0).toUpperCase();
+
+  const item =
+    "flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-stone-800 hover:bg-stone-100 dark:text-stone-100 dark:hover:bg-stone-800";
+
+  return (
+    <div className="relative" onKeyDown={(e) => e.key === "Escape" && setOpen(false)}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="flex min-h-11 items-center gap-2 rounded-full py-1 pr-3 pl-1 transition-colors hover:bg-stone-200/60 dark:hover:bg-stone-800"
+      >
+        {user?.picture ? (
+          // Google profile photo; a plain img avoids configuring remote image domains.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={user.picture}
+            alt=""
+            referrerPolicy="no-referrer"
+            className="h-8 w-8 rounded-full object-cover"
+          />
+        ) : (
+          <span
+            aria-hidden
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-700 text-sm font-semibold text-white dark:bg-teal-500 dark:text-teal-950"
+          >
+            {initial}
+          </span>
+        )}
+        <span className="max-w-32 truncate text-sm font-medium text-stone-800 dark:text-stone-100">
+          {firstName}
+        </span>
+        <span aria-hidden className="text-xs text-stone-400">▾</span>
+      </button>
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-label="Close menu"
+            tabIndex={-1}
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-10 cursor-default"
+          />
+          <div
+            role="menu"
+            className="absolute right-0 z-20 mt-2 w-64 overflow-hidden rounded-2xl border border-stone-200 bg-white py-1 shadow-lg dark:border-stone-700 dark:bg-stone-900"
+          >
+            {user && (
+              <p className="truncate border-b border-stone-100 px-4 py-2 text-xs text-stone-500 dark:border-stone-800 dark:text-stone-400">
+                {user.email}
+              </p>
+            )}
+            {watchAvailable && (
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={watchEnabled}
+                className={item}
+                onClick={() => {
+                  setOpen(false);
+                  onToggleWatch();
+                }}
+              >
+                <MenuLabel label="Live inbox watch" value={watchEnabled ? "On" : "Off"} on={watchEnabled} />
+              </button>
+            )}
+            <button
+              type="button"
+              role="menuitem"
+              className={item}
+              onClick={() => {
+                setOpen(false);
+                onToggleNotifications();
+              }}
+            >
+              <MenuLabel label="Notifications" value={notificationsOn ? "On" : "Off"} on={notificationsOn} />
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className={item}
+              onClick={() => {
+                setOpen(false);
+                onTestNotification();
+              }}
+            >
+              Send test notification
+            </button>
+            <div className="my-1 border-t border-stone-100 dark:border-stone-800" />
+            <button
+              type="button"
+              role="menuitem"
+              className={item}
+              onClick={() => {
+                setOpen(false);
+                onEditProfile();
+              }}
+            >
+              Edit profile
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className={item}
+              onClick={() => {
+                setOpen(false);
+                onSignOut();
+              }}
+            >
+              {demo ? "Exit demo" : "Sign out"}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
 export default function Dashboard({ googleClientId }: { googleClientId: string | null }) {
   const hydrated = useHydrated();
-  // undefined = not changed this session, so fall back to what is saved in the browser.
-  const [override, setOverride] = useState<Profile | null | undefined>(undefined);
-  const [editing, setEditing] = useState(false);
+  const rawUser = useSyncExternalStore(subscribeUser, getUserSnapshot, () => null);
+  const user = useMemo(() => (rawUser ? loadUser() : null), [rawUser]);
+  const [demo, setDemo] = useState(false);
+  const account = user ? user.email : demo ? DEMO_ACCOUNT : null;
+  const isDemo = !user && demo;
 
-  const profile = override !== undefined ? override : hydrated ? loadProfile() : null;
-  const showForm = hydrated && (!profile || editing);
+  // Profiles saved this session, by account; otherwise read from the browser.
+  const [saved, setSaved] = useState<Record<string, Profile>>({});
+  const profile = account
+    ? (saved[account] ?? (hydrated ? loadProfile(account) : null))
+    : null;
+
+  const [editing, setEditing] = useState<{ startAt?: StepId } | null>(null);
+  // Gmail access token lives here so onboarding and the inbox panel share it. Memory only.
+  const [token, setToken] = useState<string | null>(null);
+  const [gmailKey, setGmailKey] = useState(0);
+  const [autoScan, setAutoScan] = useState<ScanMode | null>(null);
+  const [watchEnabled, setWatchEnabled] = useState(true);
+  const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
+  const closeToast = useCallback(() => setToast(null), []);
+
+  function showToast(message: string) {
+    setToast({ id: Date.now(), message });
+  }
+
+  async function handleTestNotification() {
+    const ok = await sendTestNotification().catch(() => false);
+    showToast(
+      ok
+        ? "Test notification sent."
+        : needsHomeScreenInstall()
+          ? "On iPhone, add Good Foreigner to your Home Screen first, then allow notifications."
+          : "Notifications are off. Turn them on to get warned on your phone.",
+    );
+  }
+
+  async function handleToggleNotifications() {
+    const current = notificationPermission();
+    if (current === "granted") {
+      showToast("Notifications are on. To turn them off, use your browser's site settings.");
+      return;
+    }
+    if (needsHomeScreenInstall()) {
+      showToast("On iPhone: Share → Add to Home Screen, then open Good Foreigner from the icon.");
+      return;
+    }
+    if (current === "unsupported") {
+      showToast("This browser doesn't support notifications.");
+      return;
+    }
+    if (current === "denied") {
+      showToast("Notifications are blocked. Allow them in your browser's site settings.");
+      return;
+    }
+    const result = await requestNotifications();
+    showToast(result === "granted" ? "Notifications are on." : "Notifications stay off.");
+  }
+
   // One local calendar date shared by the countdown and the AI requests, so they agree.
   const today = hydrated ? todayLocalISO() : "";
 
-  function handleSave(p: Profile) {
-    saveProfile(p);
-    setOverride(p);
-    setEditing(false);
+  function handleSignIn(u: GoogleUser) {
+    saveUser(u); // Idempotent; the button already stores the user.
+    setDemo(false);
+  }
+
+  function startDemo() {
+    if (!loadProfile(DEMO_ACCOUNT)) saveProfile(DEMO_ACCOUNT, demoProfile());
+    setDemo(true);
+    setAutoScan("demo");
+  }
+
+  function handleSignOut() {
+    if (user) signOut();
+    setDemo(false);
+    setToken(null);
+    setGmailKey((k) => k + 1);
+    setAutoScan(null);
+    setEditing(null);
+    setWatchEnabled(true);
+  }
+
+  function handleToken(t: string) {
+    setToken(t);
+    // Scan as soon as the inbox panel is on screen (now, or after onboarding).
+    setAutoScan("gmail");
+  }
+
+  function handleTokenInvalid() {
+    setToken(null);
+    setGmailKey((k) => k + 1);
+  }
+
+  function handleComplete(p: Profile) {
+    if (!account) return;
+    saveProfile(account, p);
+    setSaved((s) => ({ ...s, [account]: p }));
+    setEditing(null);
     window.scrollTo({ top: 0 });
   }
 
-  function handleReset() {
-    clearProfile();
-    setOverride(null);
-    setEditing(false);
+  function openWizard(startAt?: StepId) {
+    setEditing({ startAt });
+    window.scrollTo({ top: 0 });
   }
 
-  function startEditing() {
-    setEditing(true);
-    window.scrollTo({ top: 0 });
+  let body: ReactNode;
+  if (!hydrated) {
+    body = (
+      <div aria-busy="true" className="mx-auto w-full max-w-2xl space-y-4 px-4 pt-20">
+        <div className="h-40 animate-pulse rounded-2xl bg-stone-200/60 dark:bg-stone-800/60" />
+        <div className="h-28 animate-pulse rounded-2xl bg-stone-200/60 dark:bg-stone-800/60" />
+      </div>
+    );
+  } else if (!account) {
+    body = <Welcome googleClientId={googleClientId} onSignIn={handleSignIn} onDemo={startDemo} />;
+  } else if (!profile || editing) {
+    body = (
+      <Onboarding
+        key={`${account}:${editing?.startAt ?? "all"}`}
+        initial={profile}
+        today={today}
+        googleClientId={googleClientId}
+        demo={isDemo}
+        loginHint={user?.email}
+        token={token}
+        gmailKey={gmailKey}
+        onToken={handleToken}
+        startAt={editing?.startAt}
+        onCancel={profile ? () => setEditing(null) : undefined}
+        onComplete={handleComplete}
+      />
+    );
+  } else {
+    body = (
+      <div className="mx-auto w-full max-w-2xl px-4 sm:px-6">
+        <header className="flex items-center justify-between gap-3 py-4">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Logo />
+            <span className="truncate text-base font-semibold text-stone-900 dark:text-stone-50">
+              Good Foreigner
+            </span>
+          </div>
+          <AccountMenu
+            user={user}
+            demo={isDemo}
+            watchAvailable={Boolean(token) && !isDemo}
+            watchEnabled={watchEnabled}
+            onToggleWatch={() => {
+              setWatchEnabled((w) => !w);
+              showToast(watchEnabled ? "Live inbox watch is off." : "Live inbox watch is on.");
+            }}
+            onTestNotification={handleTestNotification}
+            onToggleNotifications={handleToggleNotifications}
+            onEditProfile={() => openWizard()}
+            onSignOut={handleSignOut}
+          />
+        </header>
+
+        {isDemo && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl bg-teal-50 py-1 pr-1 pl-4 text-sm text-teal-900 ring-1 ring-inset ring-teal-200 dark:bg-teal-950/50 dark:text-teal-100 dark:ring-teal-900">
+            <p className="py-2">Demo with a sample inbox.</p>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="min-h-11 shrink-0 rounded-full px-4 font-semibold underline underline-offset-2 active:bg-teal-100 dark:active:bg-teal-900/60"
+            >
+              Sign in for Gmail
+            </button>
+          </div>
+        )}
+
+        <main className="space-y-8 pt-2">
+          <StayCard profile={profile} today={today} onAddI94={() => openWizard("i94")} />
+          <ScanPanel
+            profile={profile}
+            today={today}
+            googleClientId={googleClientId}
+            demo={isDemo}
+            loginHint={user?.email}
+            token={token}
+            gmailKey={gmailKey}
+            onToken={handleToken}
+            onTokenInvalid={handleTokenInvalid}
+            autoScan={autoScan}
+            onAutoScanHandled={() => setAutoScan(null)}
+            watchEnabled={watchEnabled}
+          />
+          <ActionChecker profile={profile} today={today} />
+        </main>
+      </div>
+    );
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-4 sm:px-6">
-      <header className="flex items-center justify-between gap-3 py-5">
-        <div className="flex items-center gap-2.5">
-          <Logo />
-          <div>
-            <p className="text-base font-semibold leading-tight text-stone-900 dark:text-stone-50">
-              Good Foreigner
-            </p>
-            <p className="text-xs text-stone-500 dark:text-stone-400">Stay in status</p>
-          </div>
-        </div>
-        {hydrated && profile && !editing && (
-          <button
-            type="button"
-            onClick={startEditing}
-            className="rounded-full px-3 py-1.5 text-sm font-medium text-teal-700 underline-offset-2 hover:underline dark:text-teal-300"
-          >
-            Edit profile
-          </button>
-        )}
-      </header>
-
-      <main className="flex-1">
-        {!hydrated ? (
-          <div aria-busy="true" className="space-y-4 pt-2">
-            <div className="h-40 animate-pulse rounded-2xl bg-stone-200/60 dark:bg-stone-800/60" />
-            <div className="h-28 animate-pulse rounded-2xl bg-stone-200/60 dark:bg-stone-800/60" />
-          </div>
-        ) : showForm ? (
-          <div className="space-y-6 pt-2">
-            {editing && profile ? (
-              <div>
-                <h1 className="text-2xl font-semibold tracking-tight text-stone-900 dark:text-stone-50">
-                  Edit your profile
-                </h1>
-                <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
-                  Keep your dates current so your countdown stays accurate.
-                </p>
-              </div>
-            ) : (
-              <div className="pt-4 pb-2">
-                <h1 className="text-3xl font-semibold leading-tight tracking-tight text-balance text-stone-900 sm:text-4xl dark:text-stone-50">
-                  Stay in status. Get warned before you act.
-                </h1>
-                <p className="mt-3 text-base leading-relaxed text-stone-600 dark:text-stone-400">
-                  For visitors on a B-1/B-2 visa or the Visa Waiver Program (ESTA). We count your
-                  days and check your emails and plans against official U.S. rules — so a small
-                  paid gig or a missed date doesn&apos;t cost you future visits.
-                </p>
-              </div>
-            )}
-            <ProfileForm
-              key={editing ? "edit" : "new"}
-              initial={editing ? profile : null}
-              onSave={handleSave}
-              onCancel={editing && profile ? () => setEditing(false) : undefined}
-            />
-            {editing && profile && (
-              <button
-                type="button"
-                onClick={handleReset}
-                className="text-sm text-stone-500 underline underline-offset-2 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"
-              >
-                Clear my profile from this browser
-              </button>
-            )}
-          </div>
-        ) : profile ? (
-          <div className="space-y-8 pt-2">
-            <StayCard profile={profile} today={today} onEditProfile={startEditing} />
-            <ScanPanel profile={profile} today={today} googleClientId={googleClientId} />
-            <ActionChecker profile={profile} today={today} />
-          </div>
-        ) : null}
-      </main>
-
-      <Disclaimer />
+    <div className="flex w-full flex-1 flex-col">
+      <div className="flex flex-1 flex-col">{body}</div>
+      <div className="mx-auto w-full max-w-2xl px-4 sm:px-6">
+        <Disclaimer />
+      </div>
+      {toast && <Toast key={toast.id} message={toast.message} onClose={closeToast} />}
     </div>
   );
 }

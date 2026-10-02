@@ -121,7 +121,7 @@ export default function ActionChecker({ profile, today }: { profile: Profile; to
               key={ex}
               type="button"
               onClick={() => setText(ex)}
-              className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1.5 text-left text-xs text-stone-700 transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-900 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-teal-700 dark:hover:bg-teal-950 dark:hover:text-teal-100"
+              className="min-h-11 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-2 text-left text-sm text-stone-700 transition-colors active:border-teal-300 active:bg-teal-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:active:border-teal-700 dark:active:bg-teal-950"
             >
               {ex}
             </button>
@@ -132,7 +132,7 @@ export default function ActionChecker({ profile, today }: { profile: Profile; to
           <button
             type="submit"
             disabled={!canSubmit}
-            className="order-1 rounded-full bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50 sm:order-2 dark:bg-teal-500 dark:text-teal-950 dark:hover:bg-teal-400"
+            className="order-1 min-h-12 w-full rounded-full bg-teal-700 px-6 text-base font-semibold sm:w-auto text-white shadow-sm transition-colors hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50 sm:order-2 dark:bg-teal-500 dark:text-teal-950 dark:hover:bg-teal-400"
           >
             {loading ? "Checking…" : "Check it"}
           </button>
@@ -163,7 +163,7 @@ export default function ActionChecker({ profile, today }: { profile: Profile; to
             <button
               type="submit"
               disabled={!canSubmit}
-              className="w-fit rounded-full border border-red-300 px-3 py-1 text-xs font-semibold hover:bg-red-100 disabled:opacity-50 dark:border-red-800 dark:hover:bg-red-900/50"
+              className="min-h-11 w-fit rounded-full border border-red-300 px-4 text-sm font-semibold hover:bg-red-100 disabled:opacity-50 dark:border-red-800 dark:hover:bg-red-900/50"
             >
               Try again
             </button>
@@ -173,7 +173,7 @@ export default function ActionChecker({ profile, today }: { profile: Profile; to
 
       {state.kind === "done" && (
         <div aria-live="polite">
-          <AlertCard alert={state.result.alert} />
+          <AlertCard key={state.result.alert.item.id} alert={state.result.alert} defaultOpen />
         </div>
       )}
     </section>

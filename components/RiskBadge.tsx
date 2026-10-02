@@ -1,42 +1,31 @@
 import type { RiskLevel } from "@/lib/types";
 
-const STYLES: Record<RiskLevel, { label: string; className: string; dot: string }> = {
-  critical: {
-    label: "Critical risk",
-    className:
-      "bg-red-50 text-red-800 ring-red-200 dark:bg-red-950/60 dark:text-red-200 dark:ring-red-900",
-    dot: "bg-red-600 dark:bg-red-400",
-  },
-  high: {
-    label: "High risk",
-    className:
-      "bg-orange-50 text-orange-800 ring-orange-200 dark:bg-orange-950/60 dark:text-orange-200 dark:ring-orange-900",
-    dot: "bg-orange-500 dark:bg-orange-400",
-  },
-  medium: {
-    label: "Medium risk",
-    className:
-      "bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-950/60 dark:text-amber-200 dark:ring-amber-900",
-    dot: "bg-amber-500 dark:bg-amber-400",
-  },
-  low: {
-    label: "Low risk",
-    className:
-      "bg-blue-50 text-blue-800 ring-blue-200 dark:bg-blue-950/60 dark:text-blue-200 dark:ring-blue-900",
-    dot: "bg-blue-500 dark:bg-blue-400",
-  },
-  none: {
-    label: "Looks fine",
-    className:
-      "bg-green-50 text-green-800 ring-green-200 dark:bg-green-950/60 dark:text-green-200 dark:ring-green-900",
-    dot: "bg-green-600 dark:bg-green-400",
-  },
-  unknown: {
-    label: "Couldn't check",
-    className:
-      "bg-stone-100 text-stone-700 ring-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:ring-stone-700",
-    dot: "bg-stone-400 dark:bg-stone-500",
-  },
+/** Plain-language risk words. Critical and high share one message: don't do it. */
+export const RISK_LABEL: Record<RiskLevel, string> = {
+  critical: "Don't do this",
+  high: "Don't do this",
+  medium: "Be careful",
+  low: "Probably fine",
+  none: "All good",
+  unknown: "Couldn't check",
+};
+
+export const RISK_DOT: Record<RiskLevel, string> = {
+  critical: "bg-red-600 dark:bg-red-400",
+  high: "bg-orange-500 dark:bg-orange-400",
+  medium: "bg-amber-500 dark:bg-amber-400",
+  low: "bg-blue-500 dark:bg-blue-400",
+  none: "bg-green-600 dark:bg-green-400",
+  unknown: "bg-stone-400 dark:bg-stone-500",
+};
+
+export const RISK_TEXT: Record<RiskLevel, string> = {
+  critical: "text-red-700 dark:text-red-300",
+  high: "text-orange-700 dark:text-orange-300",
+  medium: "text-amber-700 dark:text-amber-300",
+  low: "text-blue-700 dark:text-blue-300",
+  none: "text-green-700 dark:text-green-300",
+  unknown: "text-stone-600 dark:text-stone-400",
 };
 
 /** Left-edge accent for cards, keyed by risk. */
@@ -49,14 +38,13 @@ export const RISK_EDGE: Record<RiskLevel, string> = {
   unknown: "border-l-stone-400 dark:border-l-stone-600",
 };
 
+/** Colored dot + risk words, e.g. "● Don't do this". */
 export default function RiskBadge({ risk }: { risk: RiskLevel }) {
-  const s = STYLES[risk] ?? STYLES.unknown;
+  const r = RISK_LABEL[risk] ? risk : "unknown";
   return (
-    <span
-      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${s.className}`}
-    >
-      <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
-      {s.label}
+    <span className={`inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold ${RISK_TEXT[r]}`}>
+      <span aria-hidden className={`h-2.5 w-2.5 rounded-full ${RISK_DOT[r]}`} />
+      {RISK_LABEL[r]}
     </span>
   );
 }
