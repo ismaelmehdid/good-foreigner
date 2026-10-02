@@ -128,8 +128,9 @@ export default function Onboarding({
   const isVwp = visaType === "VWP";
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  // On each step change, inputs focus themselves (autoFocus). Otherwise move focus to the new
-  // step so keyboard and screen-reader users don't land back at the top of the page.
+  // On each step change, move focus to the new step so keyboard and screen-reader users don't land
+  // back at the top of the page. Date inputs are deliberately NOT auto-focused: on iOS that opens
+  // the picker over the question. Enter still continues (see onEnter).
   useEffect(() => {
     if (document.activeElement === document.body || document.activeElement === null) {
       bodyRef.current?.focus({ preventScroll: true });
@@ -148,8 +149,14 @@ export default function Onboarding({
     error = "That date is in the future. Use the day you arrived in the U.S.";
   }
   if (step === "i94" && admitUntil && entryDate && admitUntil < entryDate) {
+    // The one blocking case: an I-94 date before arrival can't be right.
     error = "This should be after the day you arrived.";
   }
+  // Unusual but possible dates (ESTA beyond day 90, B visa beyond a year) get a non-blocking note.
+  const i94Warning =
+    step === "i94" && admitUntil && entryDate && !error
+      ? computeStay(buildProfile(), today || entryDate).warning
+      : null;
 
   const canContinue =
     !error &&
@@ -402,7 +409,6 @@ export default function Onboarding({
             <input
               id="ob-arrival"
               type="date"
-              autoFocus
               value={entryDate}
               max={today || undefined}
               onChange={(e) => setEntryDate(e.target.value)}
@@ -438,17 +444,25 @@ export default function Onboarding({
             <input
               id="ob-i94"
               type="date"
-              autoFocus
               value={admitUntil}
               min={entryDate || undefined}
               onChange={(e) => setAdmitUntil(e.target.value)}
               aria-invalid={error ? true : undefined}
-              aria-describedby={error ? "ob-error" : undefined}
+              aria-describedby={error ? "ob-error" : i94Warning ? "ob-i94-warning" : undefined}
               className={`mt-6 ${inputClass}`}
             />
             {error && (
               <p id="ob-error" role="alert" className={errorClass}>
                 {error}
+              </p>
+            )}
+            {!error && i94Warning && (
+              <p
+                id="ob-i94-warning"
+                role="status"
+                className="mt-3 animate-fade-in rounded-2xl bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-900 ring-1 ring-inset ring-amber-200 dark:bg-amber-950/50 dark:text-amber-100 dark:ring-amber-900"
+              >
+                {i94Warning}
               </p>
             )}
             <button type="button" onClick={notSureAboutI94} className={`mt-3 ${quietBtn}`}>

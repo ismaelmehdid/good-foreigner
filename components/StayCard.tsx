@@ -180,6 +180,15 @@ export default function StayCard({ profile, today, onAddI94 }: Props) {
         </div>
       )}
 
+      {stay.warning && (
+        <p
+          role="note"
+          className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-900 ring-1 ring-inset ring-amber-200 dark:bg-amber-950/50 dark:text-amber-100 dark:ring-amber-900"
+        >
+          {linkify(stay.warning)}
+        </p>
+      )}
+
       {notes.length > 0 && (
         <details className="group mt-3">
           <summary className="-mb-2 flex min-h-11 w-fit cursor-pointer list-none items-center gap-1 rounded-lg text-sm font-medium text-teal-700 transition-colors hover:text-teal-900 dark:text-teal-300 dark:hover:text-teal-100 [&::-webkit-details-marker]:hidden">

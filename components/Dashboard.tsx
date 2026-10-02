@@ -1,10 +1,19 @@
 "use client";
 
-import { useCallback, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import type { Profile } from "@/lib/types";
 import type { GoogleUser } from "@/lib/auth/decodeIdToken";
 import { getUserSnapshot, loadUser, saveUser, subscribeUser } from "@/lib/auth/userStore";
 import { loadProfile, saveProfile } from "@/lib/profileStore";
+import { useGmailToken } from "@/lib/gmail/useGmailToken";
 import { signOut } from "@/components/GoogleSignInButton";
 import {
   needsHomeScreenInstall,
@@ -76,6 +85,7 @@ function AccountMenu({
   onToggleWatch,
   onTestNotification,
   onToggleNotifications,
+  inboxAction,
   onEditProfile,
   onSignOut,
 }: {
@@ -86,6 +96,8 @@ function AccountMenu({
   onToggleWatch: () => void;
   onTestNotification: () => void;
   onToggleNotifications: () => void;
+  /** "Sync inbox now", "Connect Gmail" or "Rescan sample inbox"; null hides the item. */
+  inboxAction: { label: string; onSelect: () => void; disabled?: boolean } | null;
   onEditProfile: () => void;
   onSignOut: () => void;
 }) {
@@ -187,6 +199,21 @@ function AccountMenu({
             >
               Send test notification
             </button>
+            {inboxAction && (
+              <button
+                type="button"
+                role="menuitem"
+                disabled={inboxAction.disabled}
+                className={`${item} disabled:opacity-50`}
+                onClick={() => {
+                  setOpen(false);
+                  // Called straight from the tap so the Google consent popup isn't blocked.
+                  inboxAction.onSelect();
+                }}
+              >
+                {inboxAction.label}
+              </button>
+            )}
             <div className="my-1 border-t border-stone-100 dark:border-stone-800" />
             <button
               type="button"
@@ -247,6 +274,17 @@ export default function Dashboard({
   const [gmailKey, setGmailKey] = useState(0);
   const [autoScan, setAutoScan] = useState<ScanMode | null>(null);
   const [watchEnabled, setWatchEnabled] = useState(true);
+
+  // Header-menu "Connect Gmail": the hook lives here so request() runs straight from the tap.
+  const gmail = useGmailToken(user && !isDemo ? googleClientId : null, user?.email);
+  const emitGmailToken = useEffectEvent((t: string) => handleToken(t));
+  useEffect(() => {
+    if (gmail.token) emitGmailToken(gmail.token);
+  }, [gmail.token]);
+  const emitGmailError = useEffectEvent((message: string) => showToast(message, "warning"));
+  useEffect(() => {
+    if (gmail.error) emitGmailError(gmail.error);
+  }, [gmail.error]);
   const [toast, setToast] = useState<{ id: number; message: string; tone: ToastTone } | null>(null);
   const closeToast = useCallback(() => setToast(null), []);
 
@@ -336,6 +374,14 @@ export default function Dashboard({
     window.scrollTo({ top: 0 });
   }
 
+  const inboxAction = isDemo
+    ? { label: "Rescan sample inbox", onSelect: () => setAutoScan("demo") }
+    : token
+      ? { label: "Sync inbox now", onSelect: () => setAutoScan("gmail") }
+      : user && googleClientId
+        ? { label: "Connect Gmail", onSelect: gmail.request, disabled: !gmail.ready }
+        : null;
+
   // The wizard fills exactly one screen with a sticky action bar; a footer below it would make it scroll.
   const inWizard = hydrated && Boolean(account) && (!profile || Boolean(editing));
 
@@ -398,6 +444,7 @@ export default function Dashboard({
             }}
             onTestNotification={handleTestNotification}
             onToggleNotifications={handleToggleNotifications}
+            inboxAction={inboxAction}
             onEditProfile={() => openWizard()}
             onSignOut={handleSignOut}
           />
@@ -423,11 +470,9 @@ export default function Dashboard({
             today={today}
             googleClientId={googleClientId}
             demo={isDemo}
-            loginHint={user?.email}
             token={token}
-            gmailKey={gmailKey}
-            onToken={handleToken}
             onTokenInvalid={handleTokenInvalid}
+            onConnectGmail={gmail.request}
             autoScan={autoScan}
             onAutoScanHandled={() => setAutoScan(null)}
             watchEnabled={watchEnabled}
