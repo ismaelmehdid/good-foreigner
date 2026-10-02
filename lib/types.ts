@@ -59,6 +59,8 @@ export interface Citation {
   title: string;
   name: string;
   url: string;
+  /** Verbatim sentence from the official page; used to scroll to and highlight it. */
+  quote?: string;
 }
 
 export interface Alert {
@@ -82,7 +84,8 @@ export interface Rule {
   rule: string;
   examples: string[];
   alternatives: string[];
-  citation: { name: string; url: string };
+  /** `quote` is copied verbatim from the page at `url` so the link can highlight it. */
+  citation: { name: string; url: string; quote?: string };
 }
 
 export interface ScanResponse {

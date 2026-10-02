@@ -125,6 +125,7 @@ function citationsFor(verdict: Verdict): Citation[] {
     title: r.title,
     name: r.citation.name,
     url: r.citation.url,
+    ...(r.citation.quote ? { quote: r.citation.quote } : {}),
   }));
 }
 
