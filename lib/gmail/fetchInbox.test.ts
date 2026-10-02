@@ -93,7 +93,7 @@ describe("fetchInbox", () => {
 
     const listCall = fetchMock.mock.calls[0];
     expect(String(listCall[0])).toBe(
-      "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=5&q=newer_than:30d",
+      "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=5&labelIds=INBOX&q=newer_than:30d",
     );
     const init = listCall[1] as RequestInit;
     expect(new Headers(init.headers).get("authorization")).toBe("Bearer tok-123");

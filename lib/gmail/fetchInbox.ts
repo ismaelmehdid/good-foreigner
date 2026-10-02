@@ -110,7 +110,7 @@ async function gmailGet<T>(url: string, token: string): Promise<T> {
 
 export async function fetchInbox(token: string, max = 15): Promise<InboxItem[]> {
   const list = await gmailGet<GmailListResponse>(
-    `${GMAIL_API}/messages?maxResults=${max}&q=newer_than:30d`,
+    `${GMAIL_API}/messages?maxResults=${max}&labelIds=INBOX&q=newer_than:30d`,
     token,
   );
   const ids = (list.messages ?? []).map((m) => m.id);

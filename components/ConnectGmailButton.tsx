@@ -47,7 +47,7 @@ export default function ConnectGmailButton({
           {error}
         </p>
       )}
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">Read-only. Emails are analyzed, never stored.</p>
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">Read-only. Recent inbox emails are sent to Google&apos;s Gemini API for analysis. This app stores nothing.</p>
     </div>
   );
 }
