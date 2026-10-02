@@ -121,7 +121,7 @@ export default function ActionChecker({ profile, today }: { profile: Profile; to
               key={ex}
               type="button"
               onClick={() => setText(ex)}
-              className="min-h-11 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-2 text-left text-sm text-stone-700 transition-colors active:border-teal-300 active:bg-teal-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:active:border-teal-700 dark:active:bg-teal-950"
+              className="min-h-11 max-w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-2 text-left text-sm text-stone-700 transition-colors hover:border-teal-300 hover:bg-teal-50/60 active:border-teal-300 active:bg-teal-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 dark:hover:border-teal-700 dark:hover:bg-teal-950/60 dark:active:border-teal-700 dark:active:bg-teal-950"
             >
               {ex}
             </button>
@@ -132,7 +132,7 @@ export default function ActionChecker({ profile, today }: { profile: Profile; to
           <button
             type="submit"
             disabled={!canSubmit}
-            className="order-1 min-h-12 w-full rounded-full bg-teal-700 px-6 text-base font-semibold sm:w-auto text-white shadow-sm transition-colors hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50 sm:order-2 dark:bg-teal-500 dark:text-teal-950 dark:hover:bg-teal-400"
+            className="order-1 min-h-12 w-full rounded-full bg-teal-700 px-6 text-base font-semibold text-white shadow-sm transition-colors enabled:hover:bg-teal-800 enabled:active:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50 sm:order-2 sm:w-auto dark:bg-teal-500 dark:text-teal-950 dark:enabled:hover:bg-teal-400 dark:enabled:active:bg-teal-400"
           >
             {loading ? "Checking…" : "Check it"}
           </button>

@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 
+export type ToastTone = "neutral" | "warning";
+
 /** Small bottom toast that dismisses itself after a few seconds. Render with a changing `key` to restart it. */
 export default function Toast({
   message,
@@ -10,7 +12,7 @@ export default function Toast({
 }: {
   message: string;
   onClose: () => void;
-  tone?: "neutral" | "warning";
+  tone?: ToastTone;
 }) {
   useEffect(() => {
     const t = window.setTimeout(onClose, 5000);
@@ -33,7 +35,7 @@ export default function Toast({
           type="button"
           onClick={onClose}
           aria-label="Dismiss"
-          className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full opacity-80 active:opacity-100"
+          className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full opacity-80 transition-opacity hover:opacity-100 active:opacity-100"
         >
           <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
             <path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4Z" />

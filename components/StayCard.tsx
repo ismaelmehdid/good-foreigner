@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Profile, StayStatus } from "@/lib/types";
 import { computeStay } from "@/lib/stay/stayCalculator";
+import Chevron from "@/components/Chevron";
 
 export const VISA_LABEL: Record<Profile["visaType"], string> = {
   VWP: "ESTA / Visa Waiver",
@@ -106,7 +107,7 @@ export default function StayCard({ profile, today, onAddI94 }: Props) {
     >
       <div className="flex items-center justify-between gap-2">
         <h2 id="stay-heading" className="text-sm font-medium text-stone-600 dark:text-stone-400">
-          Your stay · {VISA_LABEL[profile.visaType]}
+          Your stay · <span className="whitespace-nowrap">{VISA_LABEL[profile.visaType]}</span>
         </h2>
         <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${s.pill}`}>
           {s.label}
@@ -133,7 +134,7 @@ export default function StayCard({ profile, today, onAddI94 }: Props) {
           <button
             type="button"
             onClick={onAddI94}
-            className="mt-3 min-h-11 rounded-full bg-teal-700 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-800 dark:bg-teal-500 dark:text-teal-950 dark:hover:bg-teal-400"
+            className="mt-3 min-h-11 rounded-full bg-teal-700 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-800 active:bg-teal-800 dark:bg-teal-500 dark:text-teal-950 dark:hover:bg-teal-400 dark:active:bg-teal-400"
           >
             Add I-94 date
           </button>
@@ -170,7 +171,10 @@ export default function StayCard({ profile, today, onAddI94 }: Props) {
               aria-valuemin={0}
               aria-valuemax={100}
             >
-              <div className={`h-full rounded-full ${s.bar}`} style={{ width: `${progress}%` }} />
+              <div
+                className={`h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none ${s.bar}`}
+                style={{ width: `${progress}%` }}
+              />
             </div>
           )}
         </div>
@@ -178,11 +182,13 @@ export default function StayCard({ profile, today, onAddI94 }: Props) {
 
       {notes.length > 0 && (
         <details className="group mt-3">
-          <summary className="-mb-2 flex min-h-11 w-fit cursor-pointer list-none items-center gap-1 text-sm font-medium text-teal-700 dark:text-teal-300">
+          <summary className="-mb-2 flex min-h-11 w-fit cursor-pointer list-none items-center gap-1 rounded-lg text-sm font-medium text-teal-700 transition-colors hover:text-teal-900 dark:text-teal-300 dark:hover:text-teal-100 [&::-webkit-details-marker]:hidden">
             Good to know
-            <span aria-hidden className="transition-transform group-open:rotate-180">▾</span>
+            <span aria-hidden className="transition-transform duration-200 group-open:rotate-180">
+              <Chevron />
+            </span>
           </summary>
-          <ul className="mt-1 space-y-1.5 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
+          <ul className="mt-1 animate-fade-in space-y-1.5 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
             {notes.map((note) => (
               <li key={note} className="flex gap-2">
                 <span aria-hidden className="mt-2 h-1 w-1 shrink-0 rounded-full bg-stone-400" />

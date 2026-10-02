@@ -7,10 +7,13 @@ export default function ConnectGmailButton({
   clientId,
   onToken,
   loginHint,
+  className = "min-h-12 sm:w-auto",
 }: {
   clientId: string | null;
   onToken: (token: string) => void;
   loginHint?: string;
+  /** Height and width overrides for the button (defaults: 48px tall, full width on phones). */
+  className?: string;
 }) {
   const { token, request, ready, error } = useGmailToken(clientId, loginHint);
 
@@ -22,7 +25,7 @@ export default function ConnectGmailButton({
   if (!clientId) return null;
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex w-full flex-col gap-2">
       {token ? (
         <span className="inline-flex w-fit items-center gap-2 rounded-xl border border-green-300 bg-green-50 px-4 py-2 text-sm font-medium text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200">
           <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
@@ -39,7 +42,7 @@ export default function ConnectGmailButton({
           type="button"
           onClick={request}
           disabled={!ready}
-          className="w-fit rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          className={`w-full rounded-full bg-teal-700 px-6 text-base font-semibold text-white shadow-sm transition-colors enabled:hover:bg-teal-800 enabled:active:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-teal-500 dark:text-teal-950 dark:enabled:hover:bg-teal-400 dark:enabled:active:bg-teal-400 ${className}`}
         >
           Connect Gmail
         </button>
@@ -49,7 +52,7 @@ export default function ConnectGmailButton({
           {error}
         </p>
       )}
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">Read-only. Recent inbox emails are sent to Google&apos;s Gemini API for analysis. This app stores nothing.</p>
+      <p className="text-xs leading-relaxed text-stone-500 dark:text-stone-400">Read-only. Recent inbox emails are sent to Google&apos;s Gemini API for analysis. This app stores nothing.</p>
     </div>
   );
 }

@@ -34,7 +34,23 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 1ms !important;
+    /* Stop looping animations (spinner, skeleton pulse, live dot) instead of cycling every frame. */
+    animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* One consistent keyboard focus ring; components can still override it with utilities. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-teal-600);
+    outline-offset: 2px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :focus-visible {
+      outline-color: var(--color-teal-400);
+    }
   }
 }
 

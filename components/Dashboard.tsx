@@ -12,7 +12,7 @@ import {
   requestNotifications,
   sendTestNotification,
 } from "@/lib/notify/notify";
-import Toast from "@/components/Toast";
+import Toast, { type ToastTone } from "@/components/Toast";
 import Welcome from "@/components/Welcome";
 import Onboarding, { type StepId } from "@/components/Onboarding";
 import StayCard from "@/components/StayCard";
@@ -20,6 +20,7 @@ import ScanPanel, { type ScanMode } from "@/components/ScanPanel";
 import ActionChecker from "@/components/ActionChecker";
 import Disclaimer from "@/components/Disclaimer";
 import Logo from "@/components/Logo";
+import Chevron from "@/components/Chevron";
 
 const DEMO_ACCOUNT = "demo";
 const noopSubscribe = () => () => {};
@@ -96,13 +97,13 @@ function AccountMenu({
     "flex min-h-11 w-full items-center px-4 text-left text-sm font-medium text-stone-800 hover:bg-stone-100 dark:text-stone-100 dark:hover:bg-stone-800";
 
   return (
-    <div className="relative" onKeyDown={(e) => e.key === "Escape" && setOpen(false)}>
+    <div className="relative min-w-0" onKeyDown={(e) => e.key === "Escape" && setOpen(false)}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex min-h-11 items-center gap-2 rounded-full py-1 pr-3 pl-1 transition-colors hover:bg-stone-200/60 dark:hover:bg-stone-800"
+        className="flex min-h-11 max-w-full min-w-0 items-center gap-2 rounded-full py-1 pr-2.5 pl-1 transition-colors hover:bg-stone-200/60 active:bg-stone-200/80 dark:hover:bg-stone-800 dark:active:bg-stone-800"
       >
         {user?.picture ? (
           // Google profile photo; a plain img avoids configuring remote image domains.
@@ -111,20 +112,25 @@ function AccountMenu({
             src={user.picture}
             alt=""
             referrerPolicy="no-referrer"
-            className="h-8 w-8 rounded-full object-cover"
+            className="h-8 w-8 shrink-0 rounded-full object-cover"
           />
         ) : (
           <span
             aria-hidden
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-700 text-sm font-semibold text-white dark:bg-teal-500 dark:text-teal-950"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-700 text-sm font-semibold text-white dark:bg-teal-500 dark:text-teal-950"
           >
             {initial}
           </span>
         )}
-        <span className="max-w-32 truncate text-sm font-medium text-stone-800 dark:text-stone-100">
+        <span className="min-w-0 max-w-[5.5rem] truncate text-sm font-medium text-stone-800 sm:max-w-32 dark:text-stone-100">
           {firstName}
         </span>
-        <span aria-hidden className="text-xs text-stone-400">▾</span>
+        <span
+          aria-hidden
+          className={`text-stone-400 transition-transform duration-200 dark:text-stone-500 ${open ? "rotate-180" : ""}`}
+        >
+          <Chevron className="h-4 w-4" />
+        </span>
       </button>
       {open && (
         <>
@@ -137,7 +143,7 @@ function AccountMenu({
           />
           <div
             role="menu"
-            className="absolute right-0 z-20 mt-2 w-64 overflow-hidden rounded-2xl border border-stone-200 bg-white py-1 shadow-lg dark:border-stone-700 dark:bg-stone-900"
+            className="absolute right-0 z-20 mt-2 w-64 origin-top-right animate-fade-in overflow-hidden rounded-2xl border border-stone-200 bg-white py-1 shadow-lg dark:border-stone-700 dark:bg-stone-900"
           >
             {user && (
               <p className="truncate border-b border-stone-100 px-4 py-2 text-xs text-stone-500 dark:border-stone-800 dark:text-stone-400">
@@ -230,11 +236,12 @@ export default function Dashboard({ googleClientId }: { googleClientId: string |
   const [gmailKey, setGmailKey] = useState(0);
   const [autoScan, setAutoScan] = useState<ScanMode | null>(null);
   const [watchEnabled, setWatchEnabled] = useState(true);
-  const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
+  const [toast, setToast] = useState<{ id: number; message: string; tone: ToastTone } | null>(null);
   const closeToast = useCallback(() => setToast(null), []);
 
-  function showToast(message: string) {
-    setToast({ id: Date.now(), message });
+  // One toast for the whole page: a newer message replaces the one on screen.
+  function showToast(message: string, tone: ToastTone = "neutral") {
+    setToast({ id: Date.now(), message, tone });
   }
 
   async function handleTestNotification() {
@@ -318,12 +325,26 @@ export default function Dashboard({ googleClientId }: { googleClientId: string |
     window.scrollTo({ top: 0 });
   }
 
+  // The wizard fills exactly one screen with a sticky action bar; a footer below it would make it scroll.
+  const inWizard = hydrated && Boolean(account) && (!profile || Boolean(editing));
+
   let body: ReactNode;
   if (!hydrated) {
+    // Mirrors the dashboard layout (header, then stay and inbox cards) so nothing jumps on load.
+    const bone = "animate-pulse bg-stone-200/60 dark:bg-stone-800/60";
     body = (
-      <div aria-busy="true" className="mx-auto w-full max-w-2xl space-y-4 px-4 pt-20">
-        <div className="h-40 animate-pulse rounded-2xl bg-stone-200/60 dark:bg-stone-800/60" />
-        <div className="h-28 animate-pulse rounded-2xl bg-stone-200/60 dark:bg-stone-800/60" />
+      <div aria-busy="true" aria-label="Loading" className="mx-auto w-full max-w-2xl px-4 sm:px-6">
+        <div className="flex items-center justify-between gap-3 py-4">
+          <div className="flex items-center gap-2.5">
+            <div className={`h-7 w-7 rounded-lg ${bone}`} />
+            <div className={`h-5 w-32 rounded-md ${bone}`} />
+          </div>
+          <div className={`h-11 w-28 rounded-full ${bone}`} />
+        </div>
+        <div className="space-y-8 pt-2">
+          <div className={`h-56 rounded-2xl ${bone}`} />
+          <div className={`h-48 rounded-2xl ${bone}`} />
+        </div>
       </div>
     );
   } else if (!account) {
@@ -349,9 +370,9 @@ export default function Dashboard({ googleClientId }: { googleClientId: string |
     body = (
       <div className="mx-auto w-full max-w-2xl px-4 sm:px-6">
         <header className="flex items-center justify-between gap-3 py-4">
-          <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex shrink-0 items-center gap-2.5">
             <Logo />
-            <span className="truncate text-base font-semibold text-stone-900 dark:text-stone-50">
+            <span className="whitespace-nowrap text-base font-semibold text-stone-900 dark:text-stone-50">
               Good Foreigner
             </span>
           </div>
@@ -377,7 +398,7 @@ export default function Dashboard({ googleClientId }: { googleClientId: string |
             <button
               type="button"
               onClick={handleSignOut}
-              className="min-h-11 shrink-0 rounded-full px-4 font-semibold underline underline-offset-2 active:bg-teal-100 dark:active:bg-teal-900/60"
+              className="min-h-11 shrink-0 rounded-full px-4 font-semibold underline underline-offset-2 transition-colors hover:bg-teal-100 active:bg-teal-100 dark:hover:bg-teal-900/60 dark:active:bg-teal-900/60"
             >
               Sign in for Gmail
             </button>
@@ -399,6 +420,7 @@ export default function Dashboard({ googleClientId }: { googleClientId: string |
             autoScan={autoScan}
             onAutoScanHandled={() => setAutoScan(null)}
             watchEnabled={watchEnabled}
+            onToast={showToast}
           />
           <ActionChecker profile={profile} today={today} />
         </main>
@@ -409,10 +431,12 @@ export default function Dashboard({ googleClientId }: { googleClientId: string |
   return (
     <div className="flex w-full flex-1 flex-col">
       <div className="flex flex-1 flex-col">{body}</div>
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-6">
-        <Disclaimer />
-      </div>
-      {toast && <Toast key={toast.id} message={toast.message} onClose={closeToast} />}
+      {!inWizard && (
+        <div className="mx-auto w-full max-w-2xl px-4 sm:px-6">
+          <Disclaimer />
+        </div>
+      )}
+      {toast && <Toast key={toast.id} message={toast.message} tone={toast.tone} onClose={closeToast} />}
     </div>
   );
 }

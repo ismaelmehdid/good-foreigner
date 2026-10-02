@@ -76,7 +76,7 @@ export default function GoogleSignInButton({
     return (
       <div
         aria-disabled="true"
-        className="inline-flex h-11 w-[280px] cursor-not-allowed items-center justify-center rounded-full border border-zinc-300 text-sm text-zinc-400 dark:border-zinc-700 dark:text-zinc-500"
+        className="inline-flex h-11 w-[280px] cursor-not-allowed items-center justify-center rounded-full border border-stone-300 text-sm text-stone-400 dark:border-stone-700 dark:text-stone-500"
       >
         Google sign-in not configured
       </div>

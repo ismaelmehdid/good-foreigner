@@ -17,6 +17,7 @@ export const metadata: Metadata = {
   title: "Good Foreigner — stay in status",
   description:
     "A calm guardian for U.S. visitors on B-1/B-2 visas or the Visa Waiver Program: track your days left and get warned before an email or plan puts your status at risk.",
+  appleWebApp: { capable: true, title: "Good Foreigner", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

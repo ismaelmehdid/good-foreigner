@@ -1,8 +1,13 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { Alert, Citation } from "@/lib/types";
 import { RISK_DOT, RISK_LABEL, RISK_TEXT } from "@/components/RiskBadge";
+import Chevron from "@/components/Chevron";
+
+/** Below Tailwind's `sm` breakpoint the details open in a bottom sheet instead of inline. */
+const SHEET_QUERY = "(max-width: 639px)";
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 const UNVERIFIED_LINE =
   "We couldn't match this to an official rule. Confirm with an immigration attorney.";
@@ -139,6 +144,9 @@ export default function AlertCard({
   const expandable = Boolean(verdict);
   const [open, setOpen] = useState(defaultOpen && expandable);
   const detailsId = useId();
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   const doInstead = verdict?.whatToDoInstead?.trim() ?? "";
   const doInsteadShort = doInstead ? firstSentence(doInstead) : "";
@@ -185,6 +193,62 @@ export default function AlertCard({
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  // Phones: while the sheet is open, lock page scroll, move focus into the sheet and keep Tab
+  // inside it; on close, give focus back to the card.
+  useEffect(() => {
+    if (!open) return;
+    const mq = window.matchMedia(SHEET_QUERY);
+    const root = document.documentElement;
+    const body = document.body;
+    const prev = { root: root.style.overflow, body: body.style.overflow };
+    const toggle = toggleRef.current;
+    let sheet = false;
+
+    const unlock = () => {
+      root.style.overflow = prev.root;
+      body.style.overflow = prev.body;
+    };
+    const apply = () => {
+      sheet = mq.matches;
+      if (sheet) {
+        root.style.overflow = "hidden";
+        body.style.overflow = "hidden";
+        closeRef.current?.focus({ preventScroll: true });
+      } else {
+        unlock();
+      }
+    };
+    const trapTab = (e: KeyboardEvent) => {
+      const dialog = dialogRef.current;
+      if (!sheet || e.key !== "Tab" || !dialog) return;
+      const nodes = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+        (n) => n.tabIndex >= 0 && n.offsetParent !== null,
+      );
+      if (!nodes.length) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      const active = document.activeElement;
+      const inside = active instanceof Node && dialog.contains(active);
+      if (e.shiftKey && (active === first || !inside)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !inside)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    apply();
+    mq.addEventListener("change", apply);
+    document.addEventListener("keydown", trapTab);
+    return () => {
+      mq.removeEventListener("change", apply);
+      document.removeEventListener("keydown", trapTab);
+      unlock();
+      if (sheet) toggle?.focus({ preventScroll: true });
+    };
+  }, [open]);
+
   const details = verdict ? (
     <div className="space-y-4">
       {verdict.explanation && (
@@ -222,24 +286,21 @@ export default function AlertCard({
     <article className="min-w-0 rounded-2xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
       {expandable ? (
         <button
+          ref={toggleRef}
           type="button"
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
           aria-controls={detailsId}
-          className="flex w-full items-start gap-3 rounded-2xl p-4 text-left transition-colors active:bg-stone-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-teal-600 sm:p-5 dark:active:bg-stone-800/50"
+          className={`flex w-full items-start gap-3 p-4 text-left transition-colors hover:bg-stone-50 active:bg-stone-100/70 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-teal-600 sm:p-5 dark:hover:bg-stone-800/60 dark:active:bg-stone-800 ${
+            open ? "rounded-2xl sm:rounded-b-none" : "rounded-2xl"
+          }`}
         >
           {summary}
           <span
             aria-hidden
-            className={`mt-0.5 shrink-0 text-stone-400 transition-transform sm:block ${open ? "sm:rotate-180" : ""}`}
+            className={`mt-0.5 text-stone-400 transition-transform duration-200 dark:text-stone-500 ${open ? "sm:rotate-180" : ""}`}
           >
-            <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
-              <path
-                fillRule="evenodd"
-                d="M5.2 7.2a1 1 0 0 1 1.4 0L10 10.6l3.4-3.4a1 1 0 1 1 1.4 1.4l-4.1 4.1a1 1 0 0 1-1.4 0L5.2 8.6a1 1 0 0 1 0-1.4Z"
-                clipRule="evenodd"
-              />
-            </svg>
+            <Chevron />
           </span>
           <span className="sr-only">{open ? "Hide details" : "Show details"}</span>
         </button>
@@ -252,20 +313,27 @@ export default function AlertCard({
           {/* sm and up: details expand inline. */}
           <div
             id={detailsId}
-            className="hidden border-t border-stone-100 px-5 pt-4 pb-5 sm:block dark:border-stone-800"
+            className="hidden animate-fade-in border-t border-stone-100 px-5 pt-4 pb-5 sm:block dark:border-stone-800"
           >
             {details}
           </div>
 
           {/* Phones: details slide up in a bottom sheet. */}
-          <div className="fixed inset-0 z-50 sm:hidden" role="dialog" aria-modal="true" aria-label={titleFor(alert)}>
+          <div
+            ref={dialogRef}
+            className="fixed inset-0 z-50 sm:hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label={titleFor(alert)}
+          >
             <button
               type="button"
               aria-label="Close details"
+              tabIndex={-1}
               onClick={() => setOpen(false)}
-              className="absolute inset-0 animate-fade-in bg-black/45"
+              className="absolute inset-0 touch-none animate-fade-in bg-black/45 dark:bg-black/65"
             />
-            <div className="absolute inset-x-0 bottom-0 flex max-h-[88dvh] animate-sheet-up flex-col rounded-t-3xl bg-white shadow-2xl dark:bg-stone-900">
+            <div className="absolute inset-x-0 bottom-0 flex max-h-[88dvh] animate-sheet-up flex-col rounded-t-3xl bg-white shadow-2xl dark:bg-stone-900 dark:ring-1 dark:ring-white/10">
               <div className="flex shrink-0 items-start gap-3 px-5 pt-2">
                 <div className="min-w-0 flex-1 pt-2">
                   <span aria-hidden className="mx-auto mb-3 block h-1.5 w-10 rounded-full bg-stone-300 dark:bg-stone-600" />
@@ -276,10 +344,11 @@ export default function AlertCard({
                   <p className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">{sourceLine(alert)}</p>
                 </div>
                 <button
+                  ref={closeRef}
                   type="button"
                   onClick={() => setOpen(false)}
                   aria-label="Close"
-                  className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-stone-500 active:bg-stone-100 dark:text-stone-400 dark:active:bg-stone-800"
+                  className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-stone-100 active:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800 dark:active:bg-stone-800"
                 >
                   <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5" aria-hidden>
                     <path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4Z" />

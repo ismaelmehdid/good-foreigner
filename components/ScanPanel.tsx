@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { Alert, Profile, ScanResponse } from "@/lib/types";
 import AlertCard from "@/components/AlertCard";
+import Chevron from "@/components/Chevron";
 import ConnectGmailButton from "@/components/ConnectGmailButton";
-import Toast from "@/components/Toast";
+import type { ToastTone } from "@/components/Toast";
 import { useInboxWatch } from "@/lib/gmail/useInboxWatch";
 import { notifyAlerts } from "@/lib/notify/notify";
 
@@ -35,6 +36,8 @@ type ScanState =
   | { kind: "done"; mode: ScanMode; result: ScanResponse };
 
 const TIMEOUT_MS = 100_000;
+/** After this long, reassure the visitor that a slow scan is still running. */
+const SLOW_MS = 15_000;
 const TIMEOUT_MESSAGE = "The AI is slow right now — try again";
 
 class RequestTimeout extends Error {}
@@ -82,7 +85,7 @@ function Spinner() {
 }
 
 const primaryBtn =
-  "min-h-12 w-full rounded-full bg-teal-700 px-6 text-base font-semibold text-white shadow-sm transition-colors hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto dark:bg-teal-500 dark:text-teal-950 dark:hover:bg-teal-400";
+  "min-h-12 w-full rounded-full bg-teal-700 px-6 text-base font-semibold text-white shadow-sm transition-colors enabled:hover:bg-teal-800 enabled:active:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto dark:bg-teal-500 dark:text-teal-950 dark:enabled:hover:bg-teal-400 dark:enabled:active:bg-teal-400";
 const linkBtn =
   "min-h-11 text-sm font-medium text-teal-700 underline underline-offset-2 hover:text-teal-900 disabled:opacity-50 dark:text-teal-300 dark:hover:text-teal-100";
 
@@ -105,6 +108,8 @@ interface Props {
   onAutoScanHandled: () => void;
   /** Live inbox watch (polls Gmail and notifies on new risky emails). On by default once connected. */
   watchEnabled: boolean;
+  /** Page-level toast (owned by Dashboard so only one shows at a time). */
+  onToast: (message: string, tone?: ToastTone) => void;
 }
 
 export default function ScanPanel({
@@ -120,12 +125,12 @@ export default function ScanPanel({
   autoScan,
   onAutoScanHandled,
   watchEnabled,
+  onToast,
 }: Props) {
   const [state, setState] = useState<ScanState>({ kind: "idle" });
   const inFlight = useRef(false);
-  const [toast, setToast] = useState<{ id: number; message: string; warning: boolean } | null>(null);
+  const [slow, setSlow] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  const closeToast = useCallback(() => setToast(null), []);
 
   const watching = watchEnabled && Boolean(token) && !demo;
   const watch = useInboxWatch({
@@ -150,14 +155,12 @@ export default function ScanPanel({
       });
       void notifyAlerts(newAlerts).catch(() => 0);
       const risky = newAlerts.filter((a) => RISKY.has(a.risk)).length;
-      setToast({
-        id: Date.now(),
-        warning: risky > 0,
-        message:
-          risky > 0
-            ? `${risky} new ${risky === 1 ? "email needs" : "emails need"} your attention`
-            : `${newAlerts.length} new ${newAlerts.length === 1 ? "email looks" : "emails look"} fine`,
-      });
+      onToast(
+        risky > 0
+          ? `${risky} new ${risky === 1 ? "email needs" : "emails need"} your attention`
+          : `${newAlerts.length} new ${newAlerts.length === 1 ? "email looks" : "emails look"} fine`,
+        risky > 0 ? "warning" : "neutral",
+      );
     },
     onAuthError: (status: number) => {
       onTokenInvalid();
@@ -187,6 +190,8 @@ export default function ScanPanel({
     if (inFlight.current) return;
     inFlight.current = true;
     setState({ kind: "loading", mode });
+    setSlow(false);
+    const slowTimer = window.setTimeout(() => setSlow(true), SLOW_MS);
     try {
       const { status, ok, data } = await postScan(profile, today, mode, token);
       if (status === 401 || status === 403) {
@@ -222,6 +227,8 @@ export default function ScanPanel({
             : "We couldn't reach the server. Check your connection and try again.",
       });
     } finally {
+      window.clearTimeout(slowTimer);
+      setSlow(false);
       inFlight.current = false;
     }
   }
@@ -243,6 +250,8 @@ export default function ScanPanel({
   const attention = sorted.filter((a) => ["critical", "high", "medium"].includes(a.risk));
   const unchecked = sorted.filter((a) => a.risk === "unknown");
   const fine = sorted.filter((a) => a.risk === "low" || a.risk === "none");
+  const scanningMode = state.kind === "loading" ? state.mode : null;
+  const ago = watching ? agoLabel(watch.lastCheckedAt, now) : null;
 
   return (
     <section aria-labelledby="scan-heading" className="space-y-4">
@@ -259,15 +268,19 @@ export default function ScanPanel({
         <div className="mt-4 flex flex-col items-start gap-3">
           {!gmailAvailable ? (
             <button type="button" onClick={() => scan("demo")} disabled={loading} className={primaryBtn}>
-              {result ? "Scan the sample inbox again" : "Scan the sample inbox"}
+              {scanningMode === "demo"
+                ? "Scanning…"
+                : result
+                  ? "Scan the sample inbox again"
+                  : "Scan the sample inbox"}
             </button>
           ) : token ? (
             <>
               <button type="button" onClick={() => scan("gmail")} disabled={loading} className={primaryBtn}>
-                Scan Gmail
+                {scanningMode === "gmail" ? "Scanning…" : "Scan Gmail"}
               </button>
               <p
-                className={`inline-flex min-h-8 items-center gap-2 rounded-full px-3 text-xs font-medium ${
+                className={`inline-flex min-h-8 max-w-full items-center gap-2 rounded-2xl px-3 py-1.5 text-xs font-medium tabular-nums ${
                   watching
                     ? "bg-green-50 text-green-800 ring-1 ring-inset ring-green-200 dark:bg-green-950/50 dark:text-green-200 dark:ring-green-900"
                     : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
@@ -275,48 +288,60 @@ export default function ScanPanel({
               >
                 <span
                   aria-hidden
-                  className={`h-2 w-2 rounded-full ${
+                  className={`h-2 w-2 shrink-0 rounded-full ${
                     watching ? "animate-pulse bg-green-600 dark:bg-green-400" : "bg-stone-400"
                   }`}
                 />
-                {watching
-                  ? watch.checking
-                    ? "Watching your inbox · checking…"
-                    : `Watching your inbox${
-                        agoLabel(watch.lastCheckedAt, now) ? ` · ${agoLabel(watch.lastCheckedAt, now)}` : ""
-                      }`
-                  : "Gmail connected · live watch off"}
+                {watching ? (
+                  <span className="min-w-0">
+                    {/* Short label on phones so the pill stays on one line at 320px. */}
+                    <span className="sm:hidden">
+                      Watching{watch.checking ? " · checking…" : ago ? ` · ${ago.replace(/^checked /, "")}` : ""}
+                    </span>
+                    <span className="hidden sm:inline">
+                      Watching your inbox{watch.checking ? " · checking…" : ago ? ` · ${ago}` : ""}
+                    </span>
+                  </span>
+                ) : (
+                  "Gmail connected · live watch off"
+                )}
               </p>
               {watching && watch.error && (
                 <p className="text-xs text-red-700 dark:text-red-300">{watch.error}</p>
               )}
             </>
           ) : (
-            <ConnectGmailButton
-              key={gmailKey}
-              clientId={googleClientId}
-              loginHint={loginHint}
-              onToken={onToken}
-            />
+            <ConnectGmailButton key={gmailKey} clientId={googleClientId} loginHint={loginHint} onToken={onToken} />
           )}
 
           {gmailAvailable && (
             <button type="button" onClick={() => scan("demo")} disabled={loading} className={linkBtn}>
-              Or try the sample inbox
+              {scanningMode === "demo" ? "Scanning the sample inbox…" : "Or try the sample inbox"}
             </button>
           )}
         </div>
 
         {state.kind === "loading" && (
-          <p
+          <div
             role="status"
-            className="mt-4 flex items-center gap-3 rounded-xl bg-stone-50 px-4 py-3 text-sm text-stone-700 dark:bg-stone-800/60 dark:text-stone-300"
+            className="mt-4 flex animate-fade-in items-start gap-3 rounded-xl bg-stone-50 px-4 py-3 text-sm text-stone-700 dark:bg-stone-800/60 dark:text-stone-300"
           >
-            <Spinner />
-            {state.mode === "demo"
-              ? `Checking ${SAMPLE_COUNT} emails with Gemma, then Gemini…`
-              : `Checking up to ${GMAIL_MAX} recent emails with Gemma, then Gemini…`}
-          </p>
+            <span className="pt-0.5">
+              <Spinner />
+            </span>
+            <span className="min-w-0">
+              <span className="block">
+                {state.mode === "demo"
+                  ? `Checking ${SAMPLE_COUNT} emails with Gemma, then Gemini…`
+                  : `Checking up to ${GMAIL_MAX} recent emails with Gemma, then Gemini…`}
+              </span>
+              {slow && (
+                <span className="mt-1 block animate-fade-in text-stone-500 dark:text-stone-400">
+                  Still checking — this can take up to a minute.
+                </span>
+              )}
+            </span>
+          </div>
         )}
 
         {state.kind === "error" && (
@@ -342,8 +367,15 @@ export default function ScanPanel({
         )}
       </div>
 
+      {state.kind === "loading" && (
+        <div aria-hidden className="space-y-3">
+          <div className="h-24 animate-pulse rounded-2xl bg-stone-200/60 dark:bg-stone-800/60" />
+          <div className="h-24 animate-pulse rounded-2xl bg-stone-200/60 dark:bg-stone-800/60" />
+        </div>
+      )}
+
       {result && (
-        <div className="space-y-3" aria-live="polite">
+        <div className="animate-fade-in space-y-3" aria-live="polite">
           <div className="flex flex-wrap items-baseline justify-between gap-2 px-1">
             <h3 className="text-base font-semibold text-stone-900 dark:text-stone-50">
               {attention.length === 0 ? "Nothing risky found" : "Needs your attention"}
@@ -366,16 +398,19 @@ export default function ScanPanel({
           ))}
           {fine.length > 0 && (
             <details className="group">
-              <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-5 text-sm font-medium text-stone-700 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300">
+              <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-5 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300 dark:hover:bg-stone-800/60 [&::-webkit-details-marker]:hidden">
                 <span className="flex items-center gap-2">
                   <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-green-600 dark:bg-green-400" />
                   {fine.length} look fine
                 </span>
-                <span aria-hidden className="text-stone-400 transition-transform group-open:rotate-180">
-                  ▾
+                <span
+                  aria-hidden
+                  className="text-stone-400 transition-transform duration-200 group-open:rotate-180 dark:text-stone-500"
+                >
+                  <Chevron />
                 </span>
               </summary>
-              <div className="mt-3 space-y-3">
+              <div className="mt-3 animate-fade-in space-y-3">
                 {fine.map((a) => (
                   <AlertCard key={a.item.id} alert={a} />
                 ))}
@@ -383,9 +418,6 @@ export default function ScanPanel({
             </details>
           )}
         </div>
-      )}
-      {toast && (
-        <Toast key={toast.id} message={toast.message} tone={toast.warning ? "warning" : "neutral"} onClose={closeToast} />
       )}
     </section>
   );
