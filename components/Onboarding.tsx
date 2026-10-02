@@ -221,10 +221,14 @@ export default function Onboarding({
     const delta = e.key === "ArrowDown" || e.key === "ArrowRight" ? 1 : e.key === "ArrowUp" || e.key === "ArrowLeft" ? -1 : 0;
     if (!delta) return;
     e.preventDefault();
-    const current = VISA_CHOICES.findIndex((c) => c.value === visaType);
-    const nextIndex = current < 0 ? (delta > 0 ? 0 : VISA_CHOICES.length - 1) : (current + delta + VISA_CHOICES.length) % VISA_CHOICES.length;
+    const radios = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]'));
+    // Step from the focused card, like native radios; fall back to the selected one.
+    const focused = radios.indexOf(e.target as HTMLButtonElement);
+    const current = focused >= 0 ? focused : VISA_CHOICES.findIndex((c) => c.value === visaType);
+    const count = VISA_CHOICES.length;
+    const nextIndex = current < 0 ? (delta > 0 ? 0 : count - 1) : (current + delta + count) % count;
     setVisaType(VISA_CHOICES[nextIndex].value);
-    e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')[nextIndex]?.focus();
+    radios[nextIndex]?.focus();
   }
 
   if (done) {

@@ -431,7 +431,8 @@ export default function Dashboard({ googleClientId }: { googleClientId: string |
   return (
     <div className="flex w-full flex-1 flex-col">
       <div className="flex flex-1 flex-col">{body}</div>
-      {!inWizard && (
+      {/* Client-only: rendered under the short SSR skeleton it would jump down after hydration. */}
+      {hydrated && !inWizard && (
         <div className="mx-auto w-full max-w-2xl px-4 sm:px-6">
           <Disclaimer />
         </div>
