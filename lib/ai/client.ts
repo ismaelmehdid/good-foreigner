@@ -37,6 +37,7 @@ export function gemmaModel(): string {
 }
 
 export const TRIAGE_TIMEOUT_MS = 15_000;
+export const TRIAGE_BATCH_TIMEOUT_MS = 20_000;
 export const ANALYZE_TIMEOUT_MS = 60_000;
 export const ANALYZE_BATCH_TIMEOUT_MS = 60_000;
 

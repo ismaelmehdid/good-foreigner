@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { InboxItem, Profile, Verdict } from "@/lib/types";
 
-vi.mock("./triage", () => ({ triage: vi.fn() }));
+vi.mock("./triage", () => ({ triage: vi.fn(), triageBatch: vi.fn() }));
 vi.mock("./analyze", () => ({ analyze: vi.fn(), analyzeBatch: vi.fn() }));
 vi.mock("@/lib/rules/visitorRules", () => ({
   rulesById: (ids: string[]) =>
@@ -28,7 +28,7 @@ import {
   MAX_BODY_CHARS,
   FALLBACK_CONCURRENCY,
 } from "./pipeline";
-import { triage } from "./triage";
+import { triage, triageBatch } from "./triage";
 import { analyze, analyzeBatch } from "./analyze";
 
 const profile: Profile = { visaType: "VWP", entryDate: "2026-08-01" };
@@ -43,15 +43,15 @@ const verdict = (risk: Verdict["risk"], ruleIds: string[] = [GIG]): Verdict => (
   whatToDoInstead: "w",
   evidence: ruleIds.map((ruleId) => ({ claim: `claim for ${ruleId}`, ruleId })),
 });
-const relevantUnless = (...irrelevant: string[]) =>
-  vi.mocked(triage).mockImplementation(async (it) => ({
-    relevant: !irrelevant.includes(it.id),
-    category: "other",
-    reason: "",
-  }));
+const relevantUnless = (...irrelevant: string[]) => {
+  const judge = (it: InboxItem) => ({ relevant: !irrelevant.includes(it.id), category: "other", reason: "" });
+  vi.mocked(triage).mockImplementation(async (it) => judge(it));
+  vi.mocked(triageBatch).mockImplementation(async (items) => new Map(items.map((it) => [it.id, judge(it)])));
+};
 
 beforeEach(() => {
   vi.mocked(triage).mockReset();
+  vi.mocked(triageBatch).mockReset();
   vi.mocked(analyze).mockReset();
   vi.mocked(analyzeBatch).mockReset();
 });
@@ -145,7 +145,7 @@ describe("runPipeline", () => {
     vi.mocked(triage).mockImplementation(() => new Promise(() => {}));
     vi.mocked(analyze).mockResolvedValue(verdict("low"));
     const alerts = await runPipeline([item("a")], profile, { deadlineMs: 50 });
-    expect(alerts[0].triage).toEqual({ relevant: true, category: "other", reason: "triage failed" });
+    expect(alerts[0].triage).toEqual({ relevant: true, category: "other", reason: "Checked directly by Gemini" });
   });
 
   it("uses a single analyze call (no batch) when only one item needs analysis", async () => {
@@ -169,9 +169,28 @@ describe("runPipeline", () => {
     relevantUnless();
     vi.mocked(analyzeBatch).mockResolvedValue(new Map());
     const alerts = await runPipeline([item("long", "x".repeat(5000)), item("short")], profile);
-    expect(vi.mocked(triage).mock.calls[0][0].body.length).toBe(MAX_BODY_CHARS);
+    expect(vi.mocked(triageBatch).mock.calls[0][0][0].body.length).toBe(MAX_BODY_CHARS);
     expect(vi.mocked(analyzeBatch).mock.calls[0][0][0].body.length).toBe(MAX_BODY_CHARS);
     expect(alerts.find((a) => a.item.id === "long")!.item.body.length).toBe(MAX_BODY_CHARS);
+  });
+
+  it("triages 2+ items with ONE triageBatch call (no single triage calls)", async () => {
+    relevantUnless("b");
+    vi.mocked(analyzeBatch).mockResolvedValue(new Map());
+    vi.mocked(analyze).mockResolvedValue(verdict("low"));
+    const alerts = await runPipeline([item("a"), item("b"), item("c")], profile);
+    expect(triageBatch).toHaveBeenCalledTimes(1);
+    expect(triage).not.toHaveBeenCalled();
+    expect(alerts.find((a) => a.item.id === "b")!.risk).toBe("none");
+  });
+
+  it("replaces a 'triage failed' reason with the friendly one", async () => {
+    vi.mocked(triageBatch).mockImplementation(
+      async (items) => new Map(items.map((it) => [it.id, { relevant: true, category: "other", reason: "triage failed" }])),
+    );
+    vi.mocked(analyzeBatch).mockResolvedValue(new Map([["a", verdict("high")], ["b", verdict("high")]]));
+    const alerts = await runPipeline([item("a"), item("b")], profile);
+    expect(alerts.map((a) => a.triage.reason)).toEqual(["Checked directly by Gemini", "Checked directly by Gemini"]);
   });
 
   it("fails open when triage throws", async () => {
