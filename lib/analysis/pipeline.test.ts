@@ -19,7 +19,7 @@ vi.mock("@/lib/rules/visitorRules", () => ({
       })),
 }));
 
-import { runPipeline, mapLimit, parseProfile, MAX_BODY_CHARS, FALLBACK_CONCURRENCY } from "./pipeline";
+import { runPipeline, mapLimit, parseProfile, parseToday, MAX_BODY_CHARS, FALLBACK_CONCURRENCY } from "./pipeline";
 import { triage } from "./triage";
 import { analyze, analyzeBatch } from "./analyze";
 
@@ -76,7 +76,7 @@ describe("runPipeline", () => {
 
   it("falls back to per-item analyze (concurrency 2) when the batch call fails", async () => {
     relevantUnless();
-    vi.mocked(analyzeBatch).mockRejectedValue(new Error("429"));
+    vi.mocked(analyzeBatch).mockRejectedValue(new Error("batch response has no verdicts array"));
     let inFlight = 0;
     let peak = 0;
     vi.mocked(analyze).mockImplementation(async (it) => {
@@ -98,6 +98,43 @@ describe("runPipeline", () => {
       ["b", "low"],
       ["broken", "unknown"],
     ]);
+  });
+
+  it("passes today and an absolute deadline to analysis", async () => {
+    relevantUnless();
+    vi.mocked(analyzeBatch).mockResolvedValue(new Map());
+    const before = Date.now();
+    await runPipeline([item("a"), item("b")], profile, { today: "2026-10-02" });
+    const opts = vi.mocked(analyzeBatch).mock.calls[0][2]!;
+    expect(opts.today).toBe("2026-10-02");
+    expect(opts.deadline).toBeGreaterThan(before + 80_000);
+    expect(opts.deadline).toBeLessThanOrEqual(Date.now() + 90_000);
+  });
+
+  it.each([
+    ["timeout", Object.assign(new Error("This operation was aborted"), { name: "AbortError" })],
+    ["quota", new Error('{"error":{"code":429,"status":"RESOURCE_EXHAUSTED"}}')],
+  ])("does NOT run per-item fallback when the batch fails on %s", async (_label, err) => {
+    relevantUnless();
+    vi.mocked(analyzeBatch).mockRejectedValue(err);
+    const alerts = await runPipeline([item("a"), item("b")], profile);
+    expect(analyze).not.toHaveBeenCalled();
+    expect(alerts.every((a) => a.risk === "unknown" && a.error)).toBe(true);
+  });
+
+  it("skips per-item fallback when 30s or less remain", async () => {
+    relevantUnless();
+    vi.mocked(analyzeBatch).mockRejectedValue(new Error("bad json"));
+    const alerts = await runPipeline([item("a"), item("b")], profile, { deadlineMs: 20_000 });
+    expect(analyze).not.toHaveBeenCalled();
+    expect(alerts.map((a) => a.risk)).toEqual(["unknown", "unknown"]);
+  });
+
+  it("fails open when triage hangs past the deadline", async () => {
+    vi.mocked(triage).mockImplementation(() => new Promise(() => {}));
+    vi.mocked(analyze).mockResolvedValue(verdict("low"));
+    const alerts = await runPipeline([item("a")], profile, { deadlineMs: 50 });
+    expect(alerts[0].triage).toEqual({ relevant: true, category: "other", reason: "triage failed" });
   });
 
   it("uses a single analyze call (no batch) when only one item needs analysis", async () => {
@@ -166,6 +203,16 @@ describe("mapLimit", () => {
   });
 });
 
+describe("parseToday", () => {
+  it("accepts a real YYYY-MM-DD date and falls back to the server date otherwise", () => {
+    const server = new Date().toISOString().slice(0, 10);
+    expect(parseToday("2026-10-02")).toBe("2026-10-02");
+    expect(parseToday("2026-02-30")).toBe(server);
+    expect(parseToday("10/02/2026")).toBe(server);
+    expect(parseToday(undefined)).toBe(server);
+  });
+});
+
 describe("parseProfile", () => {
   it("accepts a valid profile and drops junk fields", () => {
     expect(parseProfile({ visaType: "B1/B2", entryDate: "2026-08-01", admitUntil: "bad", x: 1 })).toEqual({
@@ -177,5 +224,6 @@ describe("parseProfile", () => {
     expect(parseProfile(null)).toBeNull();
     expect(parseProfile({ visaType: "F1", entryDate: "2026-08-01" })).toBeNull();
     expect(parseProfile({ visaType: "VWP", entryDate: "Aug 1" })).toBeNull();
+    expect(parseProfile({ visaType: "VWP", entryDate: "2026-13-40" })).toBeNull();
   });
 });

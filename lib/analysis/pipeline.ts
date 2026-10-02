@@ -1,5 +1,6 @@
 import type { Alert, Citation, InboxItem, Profile, RiskLevel, TriageResult, Verdict } from "@/lib/types";
 import { rulesById } from "@/lib/rules/visitorRules";
+import { isQuotaError, isTimeoutError } from "@/lib/ai/client";
 import { triage } from "./triage";
 import { analyze, analyzeBatch } from "./analyze";
 
@@ -9,19 +10,45 @@ export const CONCURRENCY = 5;
 export const FALLBACK_CONCURRENCY = 2;
 const ANALYZE_ERROR = "Could not analyze this item — retry.";
 
+/** Whole-pipeline budget, well under Cloud Run's 300s request limit. */
+export const PIPELINE_DEADLINE_MS = 90_000;
+/** Triage phase budget; items still pending after it fail open (relevant). */
+export const TRIAGE_PHASE_MS = 25_000;
+/** Per-item fallback only runs if more than this remains before the deadline. */
+export const MIN_FALLBACK_REMAINING_MS = 30_000;
+
+const TRIAGE_FAIL_OPEN: TriageResult = { relevant: true, category: "other", reason: "triage failed" };
+
 export const RISK_ORDER: RiskLevel[] = ["critical", "high", "medium", "low", "unknown", "none"];
 
 const VISA_TYPES = ["VWP", "B1", "B2", "B1/B2"] as const;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** True for a real calendar date in YYYY-MM-DD form. */
+export function isIsoDate(v: unknown): v is string {
+  if (typeof v !== "string" || !ISO_DATE.test(v)) return false;
+  const [y, m, d] = v.split("-").map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
+}
+
+export function serverToday(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Client's local date (YYYY-MM-DD) from the request body, else the server's UTC date. */
+export function parseToday(input: unknown): string {
+  return isIsoDate(input) ? input : serverToday();
+}
 
 /** Validate a profile coming from an HTTP body. Returns null when invalid. */
 export function parseProfile(input: unknown): Profile | null {
   if (!input || typeof input !== "object") return null;
   const p = input as Record<string, unknown>;
   if (!VISA_TYPES.includes(p.visaType as Profile["visaType"])) return null;
-  if (typeof p.entryDate !== "string" || !ISO_DATE.test(p.entryDate)) return null;
+  if (!isIsoDate(p.entryDate)) return null;
   const profile: Profile = { visaType: p.visaType as Profile["visaType"], entryDate: p.entryDate };
-  if (typeof p.admitUntil === "string" && ISO_DATE.test(p.admitUntil)) profile.admitUntil = p.admitUntil;
+  if (isIsoDate(p.admitUntil)) profile.admitUntil = p.admitUntil;
   if (typeof p.homeCountry === "string" && p.homeCountry.trim()) profile.homeCountry = p.homeCountry.trim().slice(0, 80);
   return profile;
 }
@@ -60,48 +87,88 @@ function citationsFor(verdict: Verdict): Citation[] {
   }));
 }
 
+/** Resolve `p`, or `fallback` once the absolute `deadline` passes (the call keeps running, ignored). */
+function untilDeadline<T>(p: Promise<T>, deadline: number, fallback: T): Promise<T> {
+  const ms = deadline - Date.now();
+  if (ms <= 0) return Promise.resolve(fallback);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+  });
+  return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
+}
+
 /**
  * Verdicts for the items that need analysis. Several items → ONE batched Gemini call
- * (free tier allows ~5 requests/min/model); a single item → one plain call. If the batch
- * call fails, fall back to per-item calls with concurrency 2. Missing ids → no verdict.
+ * (free tier allows ~5 requests/min/model); a single item → one plain call.
+ * If the batch fails on a timeout or on quota (429 after every model), the items stay
+ * unanalyzed (→ "unknown") right away. For other batch errors, fall back to per-item calls
+ * (concurrency 2) only while more than 30s remain. Missing ids → no verdict.
  */
-async function analyzeAll(items: InboxItem[], profile: Profile): Promise<Map<string, Verdict>> {
-  if (items.length === 0) return new Map();
+async function analyzeAll(
+  items: InboxItem[],
+  profile: Profile,
+  today: string,
+  deadline: number,
+): Promise<Map<string, Verdict>> {
+  const out = new Map<string, Verdict>();
+  if (items.length === 0) return out;
   if (items.length > 1) {
     try {
-      return await analyzeBatch(items, profile);
+      return await analyzeBatch(items, profile, { today, deadline });
     } catch (err) {
-      console.error(`[analyzeBatch] failed, falling back to per-item:`, (err as Error).message);
+      const msg = String((err as Error).message).slice(0, 200);
+      if (isTimeoutError(err) || isQuotaError(err)) {
+        console.error(`[analyzeBatch] failed (timeout/quota), no per-item fallback:`, msg);
+        return out;
+      }
+      if (deadline - Date.now() <= MIN_FALLBACK_REMAINING_MS) {
+        console.error(`[analyzeBatch] failed with too little time left for per-item fallback:`, msg);
+        return out;
+      }
+      console.error(`[analyzeBatch] failed, falling back to per-item:`, msg);
     }
   }
-  const out = new Map<string, Verdict>();
   await mapLimit(items, FALLBACK_CONCURRENCY, async (item) => {
+    if (deadline - Date.now() <= 0) return;
     try {
-      out.set(item.id, await analyze(item, profile));
+      out.set(item.id, await analyze(item, profile, { today, deadline }));
     } catch (err) {
-      console.error(`[analyze] item ${item.id} failed:`, (err as Error).message);
+      console.error(`[analyze] item ${item.id} failed:`, String((err as Error).message).slice(0, 200));
     }
   });
   return out;
 }
 
+export interface PipelineOptions {
+  /** User's local date, YYYY-MM-DD (defaults to the server's UTC date). */
+  today?: string;
+  /** Overall budget in ms (defaults to PIPELINE_DEADLINE_MS). */
+  deadlineMs?: number;
+}
+
 /**
  * Triage every item (Gemma), analyze the relevant ones (Gemini), attach citations, sort by risk.
  * Items the user typed themselves (`source: "action"`) are always analyzed: the user asked.
+ * The whole run is bounded by an overall deadline (~90s).
  */
-export async function runPipeline(items: InboxItem[], profile: Profile): Promise<Alert[]> {
+export async function runPipeline(items: InboxItem[], profile: Profile, opts: PipelineOptions = {}): Promise<Alert[]> {
+  const today = opts.today ?? serverToday();
+  const start = Date.now();
+  const deadline = start + (opts.deadlineMs ?? PIPELINE_DEADLINE_MS);
+  const triageDeadline = Math.min(deadline, start + TRIAGE_PHASE_MS);
   const trimmed = items.map((it) => truncateBody(it));
 
   const triaged: TriageResult[] = await mapLimit(trimmed, CONCURRENCY, async (item) => {
     try {
-      return await triage(item, profile);
+      return await untilDeadline(triage(item, profile), triageDeadline, { ...TRIAGE_FAIL_OPEN });
     } catch {
-      return { relevant: true, category: "other", reason: "triage failed" };
+      return { ...TRIAGE_FAIL_OPEN };
     }
   });
 
   const needsAnalysis = (i: number) => triaged[i].relevant || trimmed[i].source === "action";
-  const verdicts = await analyzeAll(trimmed.filter((_, i) => needsAnalysis(i)), profile);
+  const verdicts = await analyzeAll(trimmed.filter((_, i) => needsAnalysis(i)), profile, today, deadline);
 
   const alerts: Alert[] = trimmed.map((item, i) => {
     const t = triaged[i];

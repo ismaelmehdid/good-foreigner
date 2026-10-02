@@ -3,6 +3,7 @@ import type { InboxItem, Profile, RuleScope, Verdict, VisaType } from "@/lib/typ
 import { ANALYZE_BATCH_TIMEOUT_MS, ANALYZE_TIMEOUT_MS, generateWithFallback, geminiModels } from "@/lib/ai/client";
 import { parseModelJson } from "@/lib/ai/json";
 import { VISITOR_RULES, rulesForPrompt } from "@/lib/rules/visitorRules";
+import { computeStay } from "@/lib/stay/stayCalculator";
 
 const RISKS: Verdict["risk"][] = ["none", "low", "medium", "high", "critical"];
 
@@ -81,11 +82,39 @@ export function rulesTextForVisa(visa: VisaType): string {
   return lines.join("\n");
 }
 
-function today(): string {
+export interface AnalyzeOptions {
+  /** User's local date, YYYY-MM-DD. Defaults to the server's UTC date. */
+  today?: string;
+  /** Absolute deadline (ms epoch) for all model attempts. */
+  deadline?: number;
+}
+
+function serverToday(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function buildSystemInstruction(profile: Profile): string {
+/** Deterministic stay facts so the model never does its own day-counting. */
+export function stayLines(profile: Profile, today: string): string[] {
+  const stay = computeStay(profile, today);
+  const lines: string[] = [];
+  if (stay.lastDay && stay.daysLeft !== null) {
+    const left =
+      stay.daysLeft >= 0
+        ? `${stay.daysLeft} days left`
+        : `${-stay.daysLeft} days PAST the last permitted day — overstay`;
+    lines.push(
+      `Last permitted day in the U.S.: ${stay.lastDay} (${left}, status ${stay.status}). This was computed exactly — never recompute it; compare every date in the item against it. Being in the U.S. on any day after ${stay.lastDay} (e.g. a departure flight after that date) is an overstay.`,
+    );
+  } else {
+    lines.push(
+      "Last permitted day in the U.S.: unknown (no I-94 admit-until date provided). Do not calculate it yourself; tell the user to check their I-94 admit-until date at https://i94.cbp.dhs.gov.",
+    );
+  }
+  for (const note of stay.notes) lines.push(`- ${note}`);
+  return lines;
+}
+
+export function buildSystemInstruction(profile: Profile, today: string = serverToday()): string {
   const visaLabel: Record<VisaType, string> = {
     VWP: "Visa Waiver Program (ESTA)",
     B1: "B-1 business visitor visa",
@@ -95,13 +124,15 @@ export function buildSystemInstruction(profile: Profile): string {
   return [
     "You are Good Foreigner, an assistant that warns visitors in the United States BEFORE they do something that could violate their immigration status.",
     "",
-    `Today's date: ${today()}.`,
+    `Today's date: ${today}.`,
     "",
     "User profile:",
     `- Status: ${visaLabel[profile.visaType] ?? profile.visaType} (${profile.visaType})`,
     `- Entry date: ${profile.entryDate}`,
     `- I-94 admit-until date: ${profile.admitUntil ?? "not provided"}`,
     profile.homeCountry ? `- Home country: ${profile.homeCountry}` : "",
+    "",
+    ...stayLines(profile, today),
     "",
     "Rules that apply to this user (format: [id] title — rule (source: url)):",
     rulesTextForVisa(profile.visaType),
@@ -172,8 +203,8 @@ function thinkingFor(model: string): ThinkingConfig | undefined {
 }
 
 /** Gemini structured verdict for one item. Throws on failure; the pipeline turns that into "unknown". */
-export async function analyze(item: InboxItem, profile: Profile): Promise<Verdict> {
-  const systemInstruction = buildSystemInstruction(profile);
+export async function analyze(item: InboxItem, profile: Profile, opts: AnalyzeOptions = {}): Promise<Verdict> {
+  const systemInstruction = buildSystemInstruction(profile, opts.today ?? serverToday());
   const { res } = await generateWithFallback(geminiModels(), { contents: buildUserContent(item) }, (model) => ({
     systemInstruction,
     responseMimeType: "application/json",
@@ -181,7 +212,7 @@ export async function analyze(item: InboxItem, profile: Profile): Promise<Verdic
     temperature: 0.2,
     thinkingConfig: thinkingFor(model),
     httpOptions: { timeout: ANALYZE_TIMEOUT_MS },
-  }));
+  }), opts.deadline);
   return validateVerdict(parseModelJson<unknown>(res.text ?? ""));
 }
 
@@ -198,10 +229,14 @@ function buildBatchContent(items: InboxItem[]): string {
  * Returns verdicts keyed by item id; items missing or invalid in the response are absent
  * from the map. Throws if the call itself fails.
  */
-export async function analyzeBatch(items: InboxItem[], profile: Profile): Promise<Map<string, Verdict>> {
+export async function analyzeBatch(
+  items: InboxItem[],
+  profile: Profile,
+  opts: AnalyzeOptions = {},
+): Promise<Map<string, Verdict>> {
   const out = new Map<string, Verdict>();
   if (items.length === 0) return out;
-  const systemInstruction = buildSystemInstruction(profile);
+  const systemInstruction = buildSystemInstruction(profile, opts.today ?? serverToday());
   const wanted = new Set(items.map((i) => i.id));
   const { res } = await generateWithFallback(geminiModels(), { contents: buildBatchContent(items) }, (model) => ({
     systemInstruction,
@@ -210,7 +245,7 @@ export async function analyzeBatch(items: InboxItem[], profile: Profile): Promis
     temperature: 0.2,
     thinkingConfig: thinkingFor(model),
     httpOptions: { timeout: ANALYZE_BATCH_TIMEOUT_MS },
-  }));
+  }), opts.deadline);
   const parsed = parseModelJson<{ verdicts?: unknown }>(res.text ?? "");
   if (!Array.isArray(parsed.verdicts)) throw new Error("batch response has no verdicts array");
   for (const entry of parsed.verdicts) {

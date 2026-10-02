@@ -1,9 +1,10 @@
 import type { ApiError, CheckResponse, InboxItem } from "@/lib/types";
-import { parseProfile, runPipeline } from "@/lib/analysis/pipeline";
+import { MAX_BODY_CHARS, parseProfile, parseToday, runPipeline } from "@/lib/analysis/pipeline";
 
 export const runtime = "nodejs";
 
-const MAX_TEXT_CHARS = 4_000;
+// Matches the pipeline truncation so the user sees the same limit the model sees.
+const MAX_TEXT_CHARS = MAX_BODY_CHARS;
 
 function error(status: number, message: string) {
   return Response.json({ error: message } satisfies ApiError, { status });
@@ -16,11 +17,17 @@ export async function POST(request: Request) {
   } catch {
     return error(400, "invalid_json");
   }
-  const { text, profile: rawProfile } = (body ?? {}) as { text?: unknown; profile?: unknown };
+  const { text, profile: rawProfile, today: rawToday } = (body ?? {}) as {
+    text?: unknown;
+    profile?: unknown;
+    today?: unknown;
+  };
 
   if (typeof text !== "string" || text.trim() === "") return error(400, "text_required");
   const profile = parseProfile(rawProfile);
   if (!profile) return error(400, "invalid_profile");
+
+  const today = parseToday(rawToday);
 
   const item: InboxItem = {
     id: `action-${crypto.randomUUID()}`,
@@ -30,7 +37,7 @@ export async function POST(request: Request) {
   };
 
   try {
-    const [alert] = await runPipeline([item], profile);
+    const [alert] = await runPipeline([item], profile, { today });
     return Response.json({ alert } satisfies CheckResponse);
   } catch (err) {
     console.error("[api/check] failed:", (err as Error).message);

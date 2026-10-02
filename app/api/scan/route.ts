@@ -1,5 +1,5 @@
 import type { ApiError, InboxItem, ScanResponse } from "@/lib/types";
-import { parseProfile, runPipeline } from "@/lib/analysis/pipeline";
+import { parseProfile, parseToday, runPipeline } from "@/lib/analysis/pipeline";
 import { SAMPLE_INBOX } from "@/lib/sample/inbox";
 import { fetchInbox, GmailAuthError } from "@/lib/gmail/fetchInbox";
 
@@ -16,10 +16,15 @@ export async function POST(request: Request) {
   } catch {
     return error(400, "invalid_json");
   }
-  const { profile: rawProfile, demo } = (body ?? {}) as { profile?: unknown; demo?: unknown };
+  const { profile: rawProfile, demo, today: rawToday } = (body ?? {}) as {
+    profile?: unknown;
+    demo?: unknown;
+    today?: unknown;
+  };
 
   const profile = parseProfile(rawProfile);
   if (!profile) return error(400, "invalid_profile");
+  const today = parseToday(rawToday);
 
   let items: InboxItem[];
   if (demo === true) {
@@ -38,7 +43,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const alerts = await runPipeline(items, profile);
+    const alerts = await runPipeline(items, profile, { today });
     return Response.json({ alerts, scanned: items.length } satisfies ScanResponse);
   } catch (err) {
     console.error("[api/scan] pipeline failed:", (err as Error).message);
