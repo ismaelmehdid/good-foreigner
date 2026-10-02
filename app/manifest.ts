@@ -1,6 +1,5 @@
 import type { MetadataRoute } from "next";
 
-// Teal brand (Tailwind teal-700) on the warm stone background used in globals.css.
 // Matches the light page background and the <meta name="theme-color"> in app/layout.tsx,
 // so the status bar color does not jump when the installed app launches.
 const THEME = "#f6f6f4";
