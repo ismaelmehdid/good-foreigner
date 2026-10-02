@@ -2,33 +2,49 @@
 
 **Get warned before you accidentally break the rules of your U.S. visitor visa.**
 
-Built at the SF Hacks x GDG AI Hackathon (October 2, 2026).
+Built in one afternoon at the SF Hacks x GDG AI Hackathon (October 2, 2026).
+Live: https://good-foreigner-440338055401.us-central1.run.app
+
+<p align="center">
+  <img src="docs/screenshots/welcome.png" width="220" alt="Welcome screen" />
+  <img src="docs/screenshots/onboarding.png" width="220" alt="One question per step onboarding" />
+  <img src="docs/screenshots/dashboard.png" width="220" alt="Dashboard with alerts grouped by risk" />
+  <img src="docs/screenshots/alert.png" width="220" alt="Alert details with official sources" />
+</p>
 
 ## The problem
 
 Millions of people visit the U.S. every year on a B-1/B-2 visa or the Visa Waiver Program (ESTA).
-The rules are strict and scattered across the Foreign Affairs Manual, federal regulations, USCIS and
-CBP pages. One honest mistake — accepting a $150 paid feedback session, overstaying by a few days,
-believing that a weekend in Canada "resets" the 90 days — can cost you the right to come back.
+Many are questioned by CBP on arrival about work and intentions, and told that breaking the rules
+could affect their ability to come back. The rules themselves are scattered across the Foreign
+Affairs Manual, federal regulations, USCIS and CBP pages.
 
-Lawyers are expensive, and asking a chatbot over and over is stressful. Good Foreigner watches what
-you are about to do and warns you first, with the rule, the official source and a safer alternative.
+So visitors worry constantly, and keep asking chatbots whether something is allowed. Meanwhile
+honest mistakes are easy to make: accepting a small paid gig offered after an event, overstaying by a
+day, or believing that a weekend in Canada "resets" the 90 days.
 
-This project started from a real situation: the author is on the Visa Waiver Program, was questioned
-by CBP on arrival, and later received a small paid job offer from a U.S. company after attending its
-event.
+Good Foreigner watches what a visitor is doing — their emails and the things they are about to do —
+and warns them *before* something could violate their status, explaining why and what to do
+instead.
 
 ## What it does
 
-- **Stay countdown** — days left before your I-94 admit-until date, with Visa Waiver Program caveats
-  (no extension, Canada/Mexico trips do not reset the clock).
-- **Inbox scan** — connects to Gmail with a read-only scope and flags emails that could lead to a
-  violation (paid gigs, contracts, W-9 requests, remote work, travel plans). A sample inbox is
-  available without signing in.
-- **Check before you act** — paste a message you are about to send, or describe what you plan to do,
-  and get a verdict.
-- Every alert explains **why**, names the **rule** with a link to the **official source**, says **what
-  to do instead**, and drafts a **polite reply** when an email asks for something risky.
+- **Sign in with Google and a one-question-per-step onboarding** — how you entered, arrival date,
+  I-94 date (or "I'm not sure"), Gmail, phone notifications.
+- **Stay countdown** — days left before your I-94 admit-until date. Dates that don't fit the visa
+  (an ESTA date past day 90, a B-visa date past one year, an I-94 date before arrival) are accepted
+  but flagged, and the safer date is used.
+- **Inbox watch** — reads Gmail with a read-only scope and flags emails that could lead to a
+  violation (paid gigs, contracts, W-9 requests, remote work, travel plans). A sample inbox works
+  without signing in.
+- **Real-time alerts on your phone** — Gmail push → Pub/Sub → Cloud Run → Web Push, so a risky email
+  triggers a notification within seconds, even when the app is closed. Installable as a home-screen
+  app.
+- **Check before you act** — paste a message you're about to send, or describe a plan, and get a
+  verdict.
+- **Every fact is sourced.** Each alert says why, what to do instead, drafts a polite reply when an
+  email asks for something risky, and links every claim to an official U.S. government source.
+  Anything without an official source is marked **Unverified**.
 
 ## How it works
 
@@ -68,8 +84,8 @@ Model IDs are configured with `GEMMA_MODEL` and `GEMINI_MODEL`.
 
 ## Google tools used
 
-Gemini API, Gemma 4, Gmail API, Google Identity Services, Google AI Studio, Cloud Run, Cloud Build,
-Artifact Registry.
+Gemini API, Gemma 4, Google AI Studio, Gmail API (read-only, `users.watch`), Google Identity
+Services (Sign in with Google), Cloud Run, Cloud Build, Artifact Registry, Pub/Sub, Firestore.
 
 ## Privacy and responsible AI
 
