@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { Alert, Citation } from "@/lib/types";
 import { RISK_DOT, RISK_LABEL, RISK_TEXT } from "@/components/RiskBadge";
+import { citationHref } from "@/lib/rules/citationHref";
 import Chevron from "@/components/Chevron";
 
 /** Below Tailwind's `sm` breakpoint the details open in a bottom sheet instead of inline. */
@@ -62,16 +63,28 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+/** Opens the official source scrolled to (and highlighting) the quoted rule text when we have it. */
 function SourceLink({ c }: { c: Citation }) {
   return (
     <a
-      href={c.url}
+      href={citationHref(c)}
       target="_blank"
       rel="noopener noreferrer"
       className="text-teal-700 underline decoration-teal-700/30 underline-offset-2 hover:decoration-teal-700 dark:text-teal-300 dark:decoration-teal-300/30 dark:hover:decoration-teal-300"
     >
       {c.name}
     </a>
+  );
+}
+
+/** The exact wording from the official source, so it's visible without leaving the app. */
+function SourceQuote({ c }: { c: Citation }) {
+  const quote = c.quote?.replace(/\s+/g, " ").trim();
+  if (!quote) return null;
+  return (
+    <blockquote className="mt-1.5 border-l-2 border-stone-300 pl-3 text-xs leading-relaxed text-stone-600 italic dark:border-stone-600 dark:text-stone-400">
+      &ldquo;{quote}&rdquo;
+    </blockquote>
   );
 }
 
@@ -98,10 +111,13 @@ function WhySources({ alert }: { alert: Alert }) {
                   <li key={i} className="text-sm leading-relaxed">
                     <p className="text-stone-800 dark:text-stone-200">{e.claim}</p>
                     {c ? (
-                      <p className="text-xs">
-                        <span className="text-stone-500 dark:text-stone-400">{c.title} — </span>
-                        <SourceLink c={c} />
-                      </p>
+                      <>
+                        <p className="text-xs">
+                          <span className="text-stone-500 dark:text-stone-400">{c.title} — </span>
+                          <SourceLink c={c} />
+                        </p>
+                        <SourceQuote c={c} />
+                      </>
                     ) : (
                       <p className="text-xs text-amber-700 dark:text-amber-300">
                         No official source matched this point.
@@ -117,6 +133,7 @@ function WhySources({ alert }: { alert: Alert }) {
                 <li key={c.ruleId} className="text-sm">
                   <span className="text-stone-700 dark:text-stone-300">{c.title} — </span>
                   <SourceLink c={c} />
+                  <SourceQuote c={c} />
                 </li>
               ))}
             </ul>

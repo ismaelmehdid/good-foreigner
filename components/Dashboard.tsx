@@ -60,6 +60,49 @@ function demoProfile(): Profile {
   return { visaType: "VWP", entryDate: localISO(d), homeCountry: "France" };
 }
 
+const RESET_CONFIRM =
+  "This signs you out and deletes your profile and alerts from this device. Continue?";
+
+/** Wipes everything this app keeps on the device, then reloads to the welcome screen. */
+async function resetApp(): Promise<void> {
+  // (a) Real-time alerts on: tell the server to stop, then drop the push subscription. Best effort.
+  try {
+    const raw = window.localStorage.getItem("gf.realtime");
+    const endpoint = raw ? (JSON.parse(raw) as { endpoint?: unknown }).endpoint : undefined;
+    if (typeof endpoint === "string" && endpoint) {
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), 4000);
+      await fetch("/api/realtime/disable", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ endpoint }),
+        signal: controller.signal,
+      })
+        .catch(() => undefined)
+        .finally(() => window.clearTimeout(timer));
+      const reg = await navigator.serviceWorker?.getRegistration("/");
+      const sub = await reg?.pushManager?.getSubscription();
+      await sub?.unsubscribe();
+    }
+  } catch {
+    // Keep resetting even if the server or push service is unreachable.
+  }
+  // (b) Every key this app owns starts with "gf.".
+  for (const store of [window.localStorage, window.sessionStorage]) {
+    try {
+      Object.keys(store)
+        .filter((k) => k.startsWith("gf."))
+        .forEach((k) => store.removeItem(k));
+    } catch {
+      // Storage blocked: nothing persisted there.
+    }
+  }
+  // (c) Stop Google auto sign-in and forget the user.
+  signOut();
+  // (d) Fresh start without a history entry back into the old session.
+  window.location.replace("/");
+}
+
 function MenuLabel({ label, value, on }: { label: string; value: string; on: boolean }) {
   return (
     <span className="flex w-full items-center justify-between gap-3">
@@ -88,6 +131,7 @@ function AccountMenu({
   inboxAction,
   onEditProfile,
   onSignOut,
+  onReset,
 }: {
   user: GoogleUser | null;
   demo: boolean;
@@ -100,6 +144,7 @@ function AccountMenu({
   inboxAction: { label: string; onSelect: () => void; disabled?: boolean } | null;
   onEditProfile: () => void;
   onSignOut: () => void;
+  onReset: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const notificationsOn = open && notificationPermission() === "granted";
@@ -236,6 +281,18 @@ function AccountMenu({
               }}
             >
               {demo ? "Exit demo" : "Sign out"}
+            </button>
+            <div className="my-1 border-t border-stone-100 dark:border-stone-800" />
+            <button
+              type="button"
+              role="menuitem"
+              className="flex min-h-11 w-full items-center px-4 text-left text-sm font-semibold text-red-700 hover:bg-red-50 active:bg-red-100 dark:text-red-300 dark:hover:bg-red-950/50 dark:active:bg-red-950"
+              onClick={() => {
+                setOpen(false);
+                onReset();
+              }}
+            >
+              {demo ? "Exit demo and reset" : "Reset app (clear my data)"}
             </button>
           </div>
         </>
@@ -447,6 +504,9 @@ export default function Dashboard({
             inboxAction={inboxAction}
             onEditProfile={() => openWizard()}
             onSignOut={handleSignOut}
+            onReset={() => {
+              if (window.confirm(RESET_CONFIRM)) void resetApp();
+            }}
           />
         </header>
 
