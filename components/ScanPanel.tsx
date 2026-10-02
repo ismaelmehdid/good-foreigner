@@ -105,11 +105,11 @@ export default function ScanPanel({
 
   const loading = state.kind === "loading";
 
-  async function scan(mode: Mode) {
+  async function scan(mode: Mode, tokenOverride?: string) {
     if (loading) return;
     setState({ kind: "loading", mode });
     try {
-      const { status, ok, data } = await postScan(profile, today, mode, token);
+      const { status, ok, data } = await postScan(profile, today, mode, tokenOverride ?? token);
       if (status === 401) {
         setToken(null);
         setGmailKey((k) => k + 1);
@@ -166,7 +166,15 @@ export default function ScanPanel({
             Try with sample inbox
           </button>
 
-          <ConnectGmailButton key={gmailKey} clientId={googleClientId} onToken={setToken} />
+          <ConnectGmailButton
+            key={gmailKey}
+            clientId={googleClientId}
+            onToken={(t) => {
+              setToken(t);
+              // Start the scan right away; the state update above lands after this call.
+              void scan("gmail", t);
+            }}
+          />
 
           {token && (
             <button
@@ -175,7 +183,7 @@ export default function ScanPanel({
               disabled={loading}
               className="rounded-full border border-teal-700 px-5 py-2.5 text-sm font-semibold text-teal-800 transition-colors hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-teal-400 dark:text-teal-200 dark:hover:bg-teal-950"
             >
-              Scan my Gmail
+              Scan my Gmail again
             </button>
           )}
         </div>
