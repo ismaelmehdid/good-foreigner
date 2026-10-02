@@ -16,7 +16,11 @@ type CheckState =
   | { kind: "error"; message: string }
   | { kind: "done"; result: CheckResponse };
 
-export default function ActionChecker({ profile }: { profile: Profile }) {
+// The server only analyzes the first 2,000 characters.
+const MAX_CHARS = 2000;
+const TIMEOUT_MS = 100_000;
+
+export default function ActionChecker({ profile, today }: { profile: Profile; today: string }) {
   const [text, setText] = useState("");
   const [state, setState] = useState<CheckState>({ kind: "idle" });
 
@@ -27,11 +31,14 @@ export default function ActionChecker({ profile }: { profile: Profile }) {
     const value = text.trim();
     if (!value || loading) return;
     setState({ kind: "loading" });
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
       const res = await fetch("/api/check", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: value, profile }),
+        body: JSON.stringify({ text: value, profile, today }),
+        signal: controller.signal,
       });
       let data: unknown = null;
       try {
@@ -39,6 +46,7 @@ export default function ActionChecker({ profile }: { profile: Profile }) {
       } catch {
         // Non-JSON response; handled below.
       }
+      if (controller.signal.aborted) throw new Error("timeout");
       if (!res.ok || !data || !(data as CheckResponse).alert) {
         const message =
           (data as { error?: string } | null)?.error ?? `The check failed (error ${res.status}).`;
@@ -49,8 +57,12 @@ export default function ActionChecker({ profile }: { profile: Profile }) {
     } catch {
       setState({
         kind: "error",
-        message: "We couldn't reach the server. Check your connection and try again.",
+        message: controller.signal.aborted
+          ? "The AI is slow right now — try again"
+          : "We couldn't reach the server. Check your connection and try again.",
       });
+    } finally {
+      window.clearTimeout(timer);
     }
   }
 
@@ -85,13 +97,25 @@ export default function ActionChecker({ profile }: { profile: Profile }) {
           id="action-text"
           rows={4}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          maxLength={MAX_CHARS}
+          onChange={(e) => setText(e.target.value.slice(0, MAX_CHARS))}
           onKeyDown={onKeyDown}
+          aria-describedby="action-text-count"
           placeholder="A question, a job offer, or a message you're about to send…"
           className="mt-3 block w-full min-w-0 resize-y rounded-xl border border-stone-300 bg-white px-3.5 py-3 text-base leading-relaxed text-stone-900 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 dark:border-stone-700 dark:bg-stone-950 dark:text-stone-100 dark:placeholder:text-stone-500 dark:focus:border-teal-400 dark:focus:ring-teal-400/20"
         />
+        <p
+          id="action-text-count"
+          className={`mt-1 text-right text-xs tabular-nums ${
+            text.length >= MAX_CHARS
+              ? "font-medium text-amber-700 dark:text-amber-300"
+              : "text-stone-500 dark:text-stone-400"
+          }`}
+        >
+          {text.length}/{MAX_CHARS}
+        </p>
 
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-2 flex flex-wrap gap-2">
           {EXAMPLES.map((ex) => (
             <button
               key={ex}
@@ -125,7 +149,7 @@ export default function ActionChecker({ profile }: { profile: Profile }) {
             </p>
           ) : (
             <p className="order-2 text-xs text-stone-500 sm:order-1 dark:text-stone-400">
-              Not stored. Answers cite official sources.
+              This app stores nothing. Answers cite official sources.
             </p>
           )}
         </div>

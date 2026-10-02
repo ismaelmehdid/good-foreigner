@@ -17,21 +17,39 @@ type ScanState =
   | { kind: "error"; mode: Mode; message: string; expired?: boolean }
   | { kind: "done"; mode: Mode; result: ScanResponse };
 
-async function postScan(profile: Profile, mode: Mode, token: string | null) {
+const TIMEOUT_MS = 100_000;
+const TIMEOUT_MESSAGE = "The AI is slow right now — try again";
+
+class RequestTimeout extends Error {}
+
+async function postScan(profile: Profile, today: string, mode: Mode, token: string | null) {
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (mode === "gmail" && token) headers.authorization = `Bearer ${token}`;
-  const res = await fetch("/api/scan", {
-    method: "POST",
-    headers,
-    body: JSON.stringify(mode === "demo" ? { profile, demo: true } : { profile }),
-  });
-  let data: unknown = null;
+  const body = mode === "demo" ? { profile, today, demo: true } : { profile, today };
+
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    data = await res.json();
-  } catch {
-    // Non-JSON response (e.g. a crash page). Handled below.
+    const res = await fetch("/api/scan", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    let data: unknown = null;
+    try {
+      data = await res.json();
+    } catch {
+      // Non-JSON response (e.g. a crash page). Handled by the caller.
+    }
+    if (controller.signal.aborted) throw new RequestTimeout();
+    return { status: res.status, ok: res.ok, data };
+  } catch (e) {
+    if (controller.signal.aborted) throw new RequestTimeout();
+    throw e;
+  } finally {
+    window.clearTimeout(timer);
   }
-  return { status: res.status, ok: res.ok, data };
 }
 
 function Spinner() {
@@ -72,9 +90,12 @@ function FineList({ alerts }: { alerts: Alert[] }) {
 
 export default function ScanPanel({
   profile,
+  today,
   googleClientId,
 }: {
   profile: Profile;
+  /** Visitor's local calendar date, YYYY-MM-DD (same one the stay countdown uses). */
+  today: string;
   googleClientId: string | null;
 }) {
   const [state, setState] = useState<ScanState>({ kind: "idle" });
@@ -88,7 +109,7 @@ export default function ScanPanel({
     if (loading) return;
     setState({ kind: "loading", mode });
     try {
-      const { status, ok, data } = await postScan(profile, mode, token);
+      const { status, ok, data } = await postScan(profile, today, mode, token);
       if (status === 401) {
         setToken(null);
         setGmailKey((k) => k + 1);
@@ -107,11 +128,14 @@ export default function ScanPanel({
         return;
       }
       setState({ kind: "done", mode, result: data as ScanResponse });
-    } catch {
+    } catch (e) {
       setState({
         kind: "error",
         mode,
-        message: "We couldn't reach the server. Check your connection and try again.",
+        message:
+          e instanceof RequestTimeout
+            ? TIMEOUT_MESSAGE
+            : "We couldn't reach the server. Check your connection and try again.",
       });
     }
   }

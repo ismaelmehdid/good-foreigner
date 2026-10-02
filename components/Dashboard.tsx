@@ -61,6 +61,8 @@ export default function Dashboard({ googleClientId }: { googleClientId: string |
 
   const profile = override !== undefined ? override : hydrated ? loadProfile() : null;
   const showForm = hydrated && (!profile || editing);
+  // One local calendar date shared by the countdown and the AI requests, so they agree.
+  const today = hydrated ? todayLocalISO() : "";
 
   function handleSave(p: Profile) {
     saveProfile(p);
@@ -150,9 +152,9 @@ export default function Dashboard({ googleClientId }: { googleClientId: string |
           </div>
         ) : profile ? (
           <div className="space-y-8 pt-2">
-            <StayCard profile={profile} today={todayLocalISO()} onEditProfile={startEditing} />
-            <ScanPanel profile={profile} googleClientId={googleClientId} />
-            <ActionChecker profile={profile} />
+            <StayCard profile={profile} today={today} onEditProfile={startEditing} />
+            <ScanPanel profile={profile} today={today} googleClientId={googleClientId} />
+            <ActionChecker profile={profile} today={today} />
           </div>
         ) : null}
       </main>
